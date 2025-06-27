@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "235928487257",
+    "project_id": "housinghub-c2dae",
+    "storage_bucket": "housinghub-c2dae.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:235928487257:android:62da9acfc70a65d5d1f848",
+        "android_client_info": {
+          "package_name": "com.harsh.housinghub"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "235928487257-tm60tacni1b0p6vho3h8bqamgi0l94j4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.harsh.housinghub",
+            "certificate_hash": "e46af05aed2c45920fed2205eeef3c8f0f85414f"
+          }
+        },
+        {
+          "client_id": "235928487257-ao5l7r0fjnqt1i36bko0gepahgpvuq6c.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAv_bsBPCHYy0TUW0N17joXd3MU6aXhupA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "235928487257-ao5l7r0fjnqt1i36bko0gepahgpvuq6c.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "235928487257-84vpn9j0fovoc4jvvmortuaslru3deqc.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.harsh.housinghub"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
