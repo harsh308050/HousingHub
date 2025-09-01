@@ -1,5 +1,5 @@
 name: housinghub
-description: "A new Flutter project."
+description: "A new Flutter Project"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: "none" # Remove this line if you wish to publish to pub.dev
@@ -40,10 +40,19 @@ dependencies:
   firebase_auth: ^5.5.4
   animated_text_kit: ^4.2.3
   firebase_core: ^3.14.0
-  geolocator: ^12.0.0
-  geocoding: ^3.0.0
+  # geolocator: ^14.0.2
+  geocoding: ^4.0.0
   http: ^1.4.0
   google_sign_in: ^6.2.1
+  country_state_city_picker: ^1.2.8
+  dropdown_search: ^6.0.2
+  url_launcher: ^6.2.5
+  geolocator: ^10.1.0
+  google_maps_flutter: ^2.5.3
+  google_maps_flutter_android: ^2.6.2
+  google_maps_flutter_platform_interface: ^2.4.3
+  image_picker: ^1.2.0
+  cloudinary_public: ^0.23.1
 
 dev_dependencies:
   flutter_test:

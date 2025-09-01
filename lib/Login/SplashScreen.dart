@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:housinghub/Helper/API.dart'; // Used for authentication check
+import 'package:housinghub/config/AppConfig.dart';
 
 class Splashscreen extends StatefulWidget {
   const Splashscreen({super.key});
@@ -20,15 +21,39 @@ class _SplashscreenState extends State<Splashscreen> {
   }
 
   // Check if user is logged in and navigate accordingly
-  void checkAuthAndNavigate() {
-    // Get current user from Firebase
-    final currentUser = Api.getCurrentUser();
+  void checkAuthAndNavigate() async {
+    try {
+      // Get current user from Firebase
+      final currentUser = Api.getCurrentUser();
 
-    if (currentUser != null) {
-      // User is logged in, navigate to HomeScreen
-      Navigator.pushReplacementNamed(context, 'HomeScreen');
-    } else {
-      // User is not logged in, navigate to LoginScreen
+      if (currentUser != null) {
+        // Reload user to ensure we have the latest auth state
+        await Api.reloadUser();
+
+        // Check if email is verified
+        if (Api.isEmailVerified()) {
+          // User is logged in and email is verified, check user type
+          String email = currentUser.email ?? '';
+
+          if (email.isNotEmpty) {
+            String userType = await Api.getUserType(email);
+
+            if (userType == 'owner') {
+              Navigator.pushReplacementNamed(context, 'OwnerHomeScreen');
+              return;
+            } else if (userType == 'tenant') {
+              Navigator.pushReplacementNamed(context, 'TenantHomeScreen');
+              return;
+            }
+          }
+        }
+      }
+
+      // Default case: not logged in, email not verified, or user type unknown
+      Navigator.pushReplacementNamed(context, 'LoginScreen');
+    } catch (e) {
+      print("Error during authentication check: $e");
+      // In case of any error, navigate to login screen
       Navigator.pushReplacementNamed(context, 'LoginScreen');
     }
   }
@@ -42,9 +67,9 @@ class _SplashscreenState extends State<Splashscreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF2563EB),
-              Color.fromARGB(255, 217, 236, 255),
-              Color(0xFF2563EB),
+              AppConfig.primaryVariant,
+              AppConfig.lightPrimaryBackground,
+              AppConfig.primaryVariant,
             ],
             stops: [0.0, 0.62, 1.0],
           ),
@@ -54,20 +79,25 @@ class _SplashscreenState extends State<Splashscreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                  width: 250,
-                  height: 250,
+                  padding: EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  width: 150,
+                  height: 150,
                   child: Image.asset(
-                    'assets/images/Logo.png',
+                    AppConfig.logoPath,
                     fit: BoxFit.cover,
                   )),
               AnimatedTextKit(animatedTexts: [
                 ColorizeAnimatedText(
-                  'Housing Hub',
+                  AppConfig.appName,
                   speed: Duration(milliseconds: 800),
                   colors: [
-                    Color.fromARGB(186, 37, 100, 235),
-                    Color.fromARGB(255, 217, 236, 255),
-                    Color.fromARGB(186, 37, 100, 235),
+                    AppConfig.primaryVariant.withAlpha(186),
+                    AppConfig.lightPrimaryBackground,
+                    AppConfig.primaryVariant.withAlpha(186),
                   ],
                   textStyle: TextStyle(
                     fontSize: 40.0,
@@ -79,9 +109,9 @@ class _SplashscreenState extends State<Splashscreen> {
               AnimatedTextKit(animatedTexts: [
                 FadeAnimatedText(
                   'Find Your Perfect Stay',
-                  duration: Duration(seconds: 3),
+                  duration: Duration(seconds: 4),
                   textStyle: TextStyle(
-                    fontSize: 25.0,
+                    fontSize: 22.0,
                     fontWeight: FontWeight.bold,
                   ),
                 ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/Helper/Models.dart';
+import 'package:housinghub/config/AppConfig.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
@@ -23,12 +24,21 @@ class _LoginScreenState extends State<LoginScreen> {
   bool isLoginTab = true;
   String gender = "Male";
   bool isLoading = false;
-  String propertyType = "PG"; // Default property type
   String? city; // Changed to nullable
   String? state; // Changed to nullable
   List<String> _states = [];
   List<String> _cities = [];
+  Map<String, String> _stateCodeMap =
+      {}; // Map to store state names and their codes
   bool _isGoogleSignUp = false; // Track if user came from Google Sign-In
+
+  // For searchable dropdowns
+  TextEditingController _stateSearchController = TextEditingController();
+  TextEditingController _citySearchController = TextEditingController();
+  bool _showStateDropdown = false;
+  bool _showCityDropdown = false;
+  List<String> _filteredStates = [];
+  List<String> _filteredCities = [];
 
   // Form controllers
   final TextEditingController _mobileController = TextEditingController();
@@ -53,19 +63,68 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     _fetchStates();
+
+    // Initialize search controllers
+    _stateSearchController.addListener(_filterStates);
+    _citySearchController.addListener(_filterCities);
   }
 
+  // Filter states based on search
+  void _filterStates() {
+    String query = _stateSearchController.text.toLowerCase();
+    setState(() {
+      _filteredStates = _states
+          .where((state) => state.toLowerCase().contains(query))
+          .toList();
+    });
+  }
+
+  // Filter cities based on search
+  void _filterCities() {
+    String query = _citySearchController.text.toLowerCase();
+    setState(() {
+      _filteredCities =
+          _cities.where((city) => city.toLowerCase().contains(query)).toList();
+    });
+  }
+
+  @override
+  void dispose() {
+    _stateSearchController.dispose();
+    _citySearchController.dispose();
+    super.dispose();
+  }
+
+  String stateCityAPI =
+      "YTBrQWhHWEVWUk9SSEVSYllzbVNVTUJWRm1oaFBpN2FWeTRKbFpqbQ==";
   Future<void> _fetchStates() async {
     setState(() {
       isLoading = true;
     });
     try {
-      final response = await http.get(Uri.parse(
-          'http://api.geonames.org/childrenJSON?geonameId=1269750&username=harsh308050'));
+      final response = await http.get(
+        Uri.parse('https://api.countrystatecity.in/v1/countries/IN/states'),
+        headers: {'X-CSCAPI-KEY': '$stateCityAPI'},
+      );
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body)['geonames'];
+        final List<dynamic> data = json.decode(response.body);
         setState(() {
-          _states = data.map((state) => state['name'].toString()).toList();
+          _states = [];
+          _stateCodeMap = {};
+
+          for (var state in data) {
+            String stateName = state['name'].toString();
+            String stateCode = state['iso2'].toString();
+            _states.add(stateName);
+            _stateCodeMap[stateName] = stateCode;
+          }
+
+          // Sort states alphabetically
+          _states.sort();
+
+          // Initialize filtered states
+          _filteredStates = List.from(_states);
+
           isLoading = false;
         });
       } else {
@@ -82,17 +141,34 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _fetchCities(String state) async {
+  Future<void> _fetchCities(String stateName) async {
     setState(() {
       isLoading = true;
     });
     try {
-      final response = await http.get(Uri.parse(
-          'http://api.geonames.org/searchJSON?q=$state&featureClass=P&maxRows=1000&username=harsh308050'));
+      if (!_stateCodeMap.containsKey(stateName)) {
+        throw Exception('State code not found for $stateName');
+      }
+
+      String stateCode = _stateCodeMap[stateName]!;
+
+      // Now fetch cities for this state
+      final response = await http.get(
+        Uri.parse(
+            'https://api.countrystatecity.in/v1/countries/IN/states/$stateCode/cities'),
+        headers: {'X-CSCAPI-KEY': '$stateCityAPI'},
+      );
+
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body)['geonames'];
+        final List<dynamic> data = json.decode(response.body);
         setState(() {
           _cities = data.map((city) => city['name'].toString()).toList();
+          // Sort cities alphabetically
+          _cities.sort();
+
+          // Initialize filtered cities
+          _filteredCities = List.from(_cities);
+
           isLoading = false;
         });
       } else {
@@ -128,7 +204,7 @@ class _LoginScreenState extends State<LoginScreen> {
         keyboardType: keyboardType,
         decoration: InputDecoration(
           hintText: hintText,
-          prefixIcon: Icon(icon, color: Colors.blue),
+          prefixIcon: Icon(icon, color: AppConfig.primaryColor),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide(color: Colors.grey[300]!),
@@ -139,7 +215,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Colors.blue),
+            borderSide: BorderSide(color: AppConfig.primaryColor),
           ),
         ),
       ),
@@ -160,7 +236,7 @@ class _LoginScreenState extends State<LoginScreen> {
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blue,
+          backgroundColor: AppConfig.primaryColor,
           padding: EdgeInsets.symmetric(vertical: height * 0.02),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
@@ -204,7 +280,7 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             FaIcon(
               icon,
-              color: Colors.blue,
+              color: AppConfig.primaryColor,
               size: width * 0.05,
             ),
             SizedBox(width: width * 0.04),
@@ -564,7 +640,6 @@ class _LoginScreenState extends State<LoginScreen> {
             : _passwordController.text.trim();
         final fullName = _fullNameController.text.trim();
         final mobileNumber = _mobileController.text.trim();
-        final propertyTypeSelected = propertyType;
         final cityValue = city ?? ''; // Use dropdown value
         final stateValue = state ?? ''; // Use dropdown value
 
@@ -645,7 +720,6 @@ class _LoginScreenState extends State<LoginScreen> {
           mobileNumber,
           fullName,
           email,
-          propertyTypeSelected,
           cityValue,
           stateValue,
         );
@@ -762,6 +836,8 @@ class _LoginScreenState extends State<LoginScreen> {
           if (matchingState.isNotEmpty) {
             setState(() {
               state = matchingState;
+              _stateSearchController.text = matchingState;
+              _showStateDropdown = false; // Close state dropdown if open
             });
 
             // Fetch cities for the detected state
@@ -778,6 +854,8 @@ class _LoginScreenState extends State<LoginScreen> {
             if (matchingCity.isNotEmpty) {
               setState(() {
                 city = matchingCity;
+                _citySearchController.text = matchingCity;
+                _showCityDropdown = false; // Close city dropdown if open
               });
             }
 
@@ -865,7 +943,6 @@ class _LoginScreenState extends State<LoginScreen> {
       state = null;
       _cities = [];
       gender = "Male"; // Reset to default
-      propertyType = "PG"; // Reset to default
     });
   }
 
@@ -1142,7 +1219,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     value!.isEmpty ? 'Please enter first name' : null,
                 decoration: InputDecoration(
                   hintText: 'First Name',
-                  prefixIcon: Icon(Icons.person_outline, color: Colors.blue),
+                  prefixIcon:
+                      Icon(Icons.person_outline, color: AppConfig.primaryColor),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(color: Colors.grey[300]!),
@@ -1153,7 +1231,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.blue),
+                    borderSide: BorderSide(color: Color(0xFF007AFF)),
                   ),
                 ),
               ),
@@ -1166,7 +1244,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     value!.isEmpty ? 'Please enter last name' : null,
                 decoration: InputDecoration(
                   hintText: 'Last Name',
-                  prefixIcon: Icon(Icons.person_2_outlined, color: Colors.blue),
+                  prefixIcon: Icon(Icons.person_2_outlined,
+                      color: AppConfig.primaryColor),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(color: Colors.grey[300]!),
@@ -1177,7 +1256,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.blue),
+                    borderSide: BorderSide(color: Color(0xFF007AFF)),
                   ),
                 ),
               ),
@@ -1310,105 +1389,140 @@ class _LoginScreenState extends State<LoginScreen> {
                 value!.isEmpty ? 'Please enter your password' : null,
           ),
 
-        // Property Type dropdown
+        // State Custom Searchable Dropdown
         Padding(
           padding: const EdgeInsets.only(bottom: 16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Property Type',
-                style: TextStyle(
-                  fontSize: width * 0.04,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
-                ),
-              ),
-              SizedBox(height: 8),
+              // State input field
               Container(
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.blue),
-                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: propertyType,
-                    isExpanded: true,
-                    icon: Icon(Icons.arrow_drop_down, color: Colors.blue),
-                    items: ['PG', 'Hostel', 'Room'].map((String value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      );
-                    }).toList(),
-                    onChanged: (String? newValue) {
-                      if (newValue != null) {
+                child: Column(
+                  children: [
+                    // State input with search functionality
+                    TextFormField(
+                      controller: _stateSearchController,
+                      decoration: InputDecoration(
+                        labelText: 'State',
+                        labelStyle: TextStyle(
+                          fontSize: width * 0.045,
+                          color: AppConfig.primaryColor,
+                        ),
+                        prefixIcon: Icon(Icons.map, color: Color(0xFF007AFF)),
+                        suffixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_stateSearchController.text.isNotEmpty)
+                              IconButton(
+                                icon: Icon(Icons.clear, color: Colors.grey),
+                                onPressed: () {
+                                  setState(() {
+                                    _stateSearchController.clear();
+                                    _showStateDropdown = false;
+                                  });
+                                },
+                              ),
+                            IconButton(
+                              icon: Icon(
+                                _showStateDropdown
+                                    ? Icons.arrow_drop_up
+                                    : Icons.arrow_drop_down,
+                                color: Color(0xFF007AFF),
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _showStateDropdown = !_showStateDropdown;
+                                  if (_showStateDropdown) {
+                                    _showCityDropdown = false;
+                                    _filteredStates = _states;
+                                  }
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 5,
+                        ),
+                      ),
+                      onTap: () {
                         setState(() {
-                          propertyType = newValue;
+                          _showStateDropdown = true;
+                          _showCityDropdown = false;
+                          _filteredStates = _states;
                         });
-                      }
-                    },
-                  ),
+                      },
+                      onChanged: (value) {
+                        if (value.isEmpty) {
+                          setState(() {
+                            state = null;
+                          });
+                        }
+                      },
+                      validator: (value) {
+                        if (state == null) {
+                          return 'Please select a state';
+                        }
+                        return null;
+                      },
+                    ),
+
+                    // State dropdown list
+                    if (_showStateDropdown)
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border(
+                            top: BorderSide(color: Colors.grey[300]!),
+                          ),
+                        ),
+                        constraints: BoxConstraints(
+                          maxHeight: 200,
+                        ),
+                        child: _filteredStates.isEmpty
+                            ? Padding(
+                                padding: const EdgeInsets.all(12.0),
+                                child: Center(
+                                  child: Text(
+                                    "No states found",
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: _filteredStates.length,
+                                itemBuilder: (context, index) {
+                                  return ListTile(
+                                    dense: true,
+                                    title: Text(_filteredStates[index]),
+                                    onTap: () {
+                                      setState(() {
+                                        state = _filteredStates[index];
+                                        _stateSearchController.text = state!;
+                                        _showStateDropdown = false;
+                                        city = null;
+                                        _citySearchController.clear();
+                                        _cities = [];
+                                      });
+                                      _fetchCities(state!);
+                                    },
+                                  );
+                                },
+                              ),
+                      ),
+                  ],
                 ),
               ),
             ],
-          ),
-        ),
-
-        // State Dropdown
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16.0),
-          child: DropdownButtonFormField<String>(
-            value: state,
-            hint: Text("Select State"),
-            items: _states.map((String state) {
-              return DropdownMenuItem<String>(
-                value: state,
-                child: Text(state,
-                    style: TextStyle(
-                      fontSize: width * 0.035,
-                      color: Colors.black,
-                    )),
-              );
-            }).toList(),
-            onChanged: (newValue) {
-              setState(() {
-                state = newValue;
-                city = null; // Reset city when state changes
-                _cities = [];
-              });
-              if (newValue != null) {
-                _fetchCities(newValue);
-              }
-            },
-            validator: (value) {
-              if (value == null) {
-                return 'Please select a state';
-              }
-              return null;
-            },
-            decoration: InputDecoration(
-              labelText: "State",
-              prefixIcon: Icon(Icons.map, color: Colors.blue),
-              labelStyle: TextStyle(
-                fontSize: width * 0.045,
-                color: Colors.blue,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.blue, width: 2),
-              ),
-              floatingLabelBehavior: FloatingLabelBehavior.always,
-            ),
           ),
         ),
 
@@ -1417,74 +1531,195 @@ class _LoginScreenState extends State<LoginScreen> {
           padding: const EdgeInsets.only(bottom: 16.0),
           child: Row(
             children: [
+              // City searchable dropdown
               Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: city,
-                  hint: Text("Select City"),
-                  items: _cities.map((String city) {
-                    return DropdownMenuItem<String>(
-                      value: city,
-                      child: Text(city),
-                    );
-                  }).toList(),
-                  onChanged: (newValue) {
-                    setState(() {
-                      city = newValue;
-                    });
-                  },
-                  validator: (value) {
-                    if (value == null) {
-                      return 'Please select a city';
-                    }
-                    return null;
-                  },
-                  decoration: InputDecoration(
-                    labelText: "City",
-                    prefixIcon: Icon(Icons.location_city, color: Colors.blue),
-                    labelStyle: TextStyle(
-                      fontSize: width * 0.045,
-                      color: Colors.blue,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: [
+                          // City input with search functionality
+                          TextFormField(
+                            controller: _citySearchController,
+                            decoration: InputDecoration(
+                              labelText: 'City',
+                              labelStyle: TextStyle(
+                                fontSize: width * 0.045,
+                                color: Color(0xFF007AFF),
+                              ),
+                              prefixIcon: Icon(Icons.location_city,
+                                  color: Color(0xFF007AFF)),
+                              suffixIcon: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (_citySearchController.text.isNotEmpty)
+                                    IconButton(
+                                      icon:
+                                          Icon(Icons.clear, color: Colors.grey),
+                                      onPressed: () {
+                                        setState(() {
+                                          _citySearchController.clear();
+                                          _showCityDropdown = false;
+                                          city = null;
+                                        });
+                                      },
+                                    ),
+                                  IconButton(
+                                    icon: Icon(
+                                      _showCityDropdown
+                                          ? Icons.arrow_drop_up
+                                          : Icons.arrow_drop_down,
+                                      color: AppConfig.primaryColor,
+                                    ),
+                                    onPressed: () {
+                                      if (_cities.isEmpty) {
+                                        Models.showWarningSnackBar(context,
+                                            'Please select a state first');
+                                        return;
+                                      }
+                                      setState(() {
+                                        _showCityDropdown = !_showCityDropdown;
+                                        if (_showCityDropdown) {
+                                          _showStateDropdown = false;
+                                          _filteredCities = _cities;
+                                        }
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 5,
+                              ),
+                            ),
+                            enabled: _cities.isNotEmpty,
+                            onTap: () {
+                              if (_cities.isEmpty) {
+                                Models.showWarningSnackBar(
+                                    context, 'Please select a state first');
+                                return;
+                              }
+                              setState(() {
+                                _showCityDropdown = true;
+                                _showStateDropdown = false;
+                                _filteredCities = _cities;
+                              });
+                            },
+                            onChanged: (value) {
+                              if (value.isEmpty) {
+                                setState(() {
+                                  city = null;
+                                });
+                              }
+                            },
+                            validator: (value) {
+                              if (state != null && city == null) {
+                                return 'Please select a city';
+                              }
+                              return null;
+                            },
+                          ),
+
+                          // City dropdown list
+                          if (_showCityDropdown)
+                            Container(
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  top: BorderSide(color: Colors.grey[300]!),
+                                ),
+                              ),
+                              constraints: BoxConstraints(
+                                maxHeight: 200,
+                              ),
+                              child: _filteredCities.isEmpty
+                                  ? Padding(
+                                      padding: const EdgeInsets.all(12.0),
+                                      child: Center(
+                                        child: Text(
+                                          "No cities found",
+                                          style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      shrinkWrap: true,
+                                      itemCount: _filteredCities.length,
+                                      itemBuilder: (context, index) {
+                                        return ListTile(
+                                          dense: true,
+                                          title: Text(_filteredCities[index]),
+                                          onTap: () {
+                                            setState(() {
+                                              city = _filteredCities[index];
+                                              _citySearchController.text =
+                                                  city!;
+                                              _showCityDropdown = false;
+                                            });
+                                          },
+                                        );
+                                      },
+                                    ),
+                            ),
+                        ],
+                      ),
                     ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.blue, width: 2),
-                    ),
-                    floatingLabelBehavior: FloatingLabelBehavior.always,
-                  ),
+                  ],
                 ),
               ),
+
               SizedBox(width: 8),
-              // Location button
-              InkWell(
-                onTap: _getCurrentLocation,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isLoading ? Colors.grey : Colors.blue,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: EdgeInsets.all(12),
-                  child: isLoading
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : Icon(
-                          Icons.my_location,
-                          color: Colors.white,
+
+              // Location button - enhanced with animation
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _getCurrentLocation,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isLoading ? Colors.grey[400] : Color(0xFF007AFF),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0xFF007AFF).withOpacity(0.3),
+                          spreadRadius: 1,
+                          blurRadius: 3,
+                          offset: Offset(0, 2),
                         ),
+                      ],
+                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                    child: isLoading
+                        ? SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.my_location,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                            ],
+                          ),
+                  ),
                 ),
               ),
             ],
@@ -1515,9 +1750,9 @@ class _LoginScreenState extends State<LoginScreen> {
       width: width * 0.44,
       height: height * 0.06,
       decoration: BoxDecoration(
-        color: isSelected ? Colors.blue : Colors.white,
+        color: isSelected ? Color(0xFF007AFF) : Colors.white,
         border: Border.all(
-          color: isSelected ? Colors.white : Colors.blue,
+          color: isSelected ? Colors.white : Color(0xFF007AFF),
         ),
         borderRadius: BorderRadius.circular(10),
       ),
@@ -1528,14 +1763,14 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             Icon(
               icon,
-              color: isSelected ? Colors.white : Colors.blue,
+              color: isSelected ? Colors.white : Color(0xFF007AFF),
             ),
             SizedBox(width: width * 0.02),
             Text(
               label,
               style: TextStyle(
                 fontSize: width * 0.04,
-                color: isSelected ? Colors.white : Colors.blue,
+                color: isSelected ? Colors.white : Color(0xFF007AFF),
               ),
             ),
           ],
@@ -1574,10 +1809,10 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Container(
           padding: EdgeInsets.symmetric(vertical: width * 0.035),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.blue : Colors.white,
+            color: isSelected ? Color(0xFF007AFF) : Colors.white,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: isSelected ? Colors.transparent : Colors.blue,
+              color: isSelected ? Colors.transparent : Color(0xFF007AFF),
               width: 2,
             ),
           ),
@@ -1587,7 +1822,7 @@ class _LoginScreenState extends State<LoginScreen> {
               style: TextStyle(
                 fontSize: width * 0.045,
                 fontWeight: FontWeight.bold,
-                color: isSelected ? Colors.white : Colors.blue,
+                color: isSelected ? Colors.white : Color(0xFF007AFF),
               ),
             ),
           ),
@@ -1612,7 +1847,7 @@ class _LoginScreenState extends State<LoginScreen> {
               label,
               style: TextStyle(
                 fontSize: width * 0.05,
-                color: isSelected ? Colors.blue : Colors.grey[600],
+                color: isSelected ? Color(0xFF007AFF) : Colors.grey[600],
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
             ),
@@ -1621,7 +1856,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Container(
                 height: 2,
                 width: width / 3,
-                color: Colors.blue,
+                color: Color(0xFF007AFF),
               ),
           ],
         ),

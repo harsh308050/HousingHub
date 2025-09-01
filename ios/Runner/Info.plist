@@ -15,7 +15,9 @@
 	<key>CFBundleName</key>
 	<string>housinghub</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app needs access to your location to fetch city and state.</string>
+	<string>This app needs access to location when open to show your current location on the map.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>This app needs access to location when in the background to show your current location on the map.</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -47,5 +49,22 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.235928487257-84vpn9j0fovoc4jvvmortuaslru3deqc</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs camera access to take photos of your property</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs photos access to let you choose property images</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app needs microphone access to record property videos</string>
 </dict>
 </plist>

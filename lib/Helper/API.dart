@@ -440,13 +440,8 @@ class Api {
   }
 
   // Create a new owner in Firestore if not exists
-  static Future<void> createOwnerIfNotExists(
-      String mobileNumber,
-      String fullName,
-      String email,
-      String propertyType,
-      String city,
-      String state) async {
+  static Future<void> createOwnerIfNotExists(String mobileNumber,
+      String fullName, String email, String city, String state) async {
     try {
       print("API: Creating owner in Firestore with email: $email");
 
@@ -467,7 +462,6 @@ class Api {
         'mobileNumber': mobileNumber,
         'fullName': fullName,
         'email': email,
-        'propertyType': propertyType,
         'city': city,
         'state': state,
         'userType': 'owner', // Adding user type for future reference
@@ -497,6 +491,64 @@ class Api {
     } catch (e) {
       print("Error getting owner details: $e");
       return null;
+    }
+  }
+
+  // Check if user is owner or tenant
+  static Future<String> getUserType(String email) async {
+    if (email.isEmpty) {
+      return 'unknown';
+    }
+
+    try {
+      // First check if user exists in Owners collection
+      final ownerDoc = await _firestore.collection('Owners').doc(email).get();
+      if (ownerDoc.exists) {
+        return 'owner';
+      }
+
+      // Then check if user exists in Tenants collection
+      final tenantDoc = await _firestore.collection('Tenants').doc(email).get();
+      if (tenantDoc.exists) {
+        return 'tenant';
+      }
+
+      // If user is not found in collections but is authenticated,
+      // check providers to make a best guess
+      User? currentUser = getCurrentUser();
+      if (currentUser != null && currentUser.email == email) {
+        // If user is a Google user, query both collections by UID as well
+        if (currentUser.providerData
+            .any((provider) => provider.providerId == 'google.com')) {
+          // Check owners by UID
+          final ownerQuery = await _firestore
+              .collection('Owners')
+              .where('uid', isEqualTo: currentUser.uid)
+              .limit(1)
+              .get();
+
+          if (ownerQuery.docs.isNotEmpty) {
+            return 'owner';
+          }
+
+          // Check tenants by UID
+          final tenantQuery = await _firestore
+              .collection('Tenants')
+              .where('uid', isEqualTo: currentUser.uid)
+              .limit(1)
+              .get();
+
+          if (tenantQuery.docs.isNotEmpty) {
+            return 'tenant';
+          }
+        }
+      }
+
+      // Default if user not found in either collection
+      return 'unknown';
+    } catch (e) {
+      print("Error checking user type: $e");
+      return 'unknown';
     }
   }
 }
