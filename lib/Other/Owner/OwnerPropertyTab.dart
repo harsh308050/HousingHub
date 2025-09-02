@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Other/Owner/AddProperty.dart';
+import 'package:housinghub/Other/Owner/EditProperty.dart';
+import 'package:housinghub/Helper/API.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class OwnerPropertyTab extends StatefulWidget {
   const OwnerPropertyTab({super.key});
@@ -14,26 +17,9 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
   late TabController _tabController;
   bool _showFloatingButton = true;
 
-  // Sample data for properties
-  final List<Map<String, dynamic>> _properties = [
-    {
-      'name': 'Modern Downtown Apartment',
-      'address': '123 Main St, Downtown',
-      'price': 2500,
-      'image':
-          'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg',
-      'isAvailable': true,
-    },
-    {
-      'name': 'Luxury Beach House',
-      'address': '456 Ocean Drive, Beachside',
-      'price': 4500,
-      'image':
-          'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg',
-      'isAvailable': false,
-    },
-    // Add more sample properties as needed
-  ];
+  List<Map<String, dynamic>> _properties = [];
+  bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -42,6 +28,34 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
     _tabController.addListener(() {
       setState(() {});
     });
+    _fetchProperties();
+  }
+
+  Future<void> _fetchProperties() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || user.email == null) {
+        setState(() {
+          _error = 'You must be logged in to view properties.';
+          _isLoading = false;
+        });
+        return;
+      }
+      final properties = await Api.getAllOwnerProperties(user.email!);
+      setState(() {
+        _properties = properties;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to load properties.';
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -60,31 +74,36 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
             _buildHeader(),
             _buildTabBar(),
             Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildPropertyList(_properties), // All properties
-                  _buildPropertyList(_properties
-                      .where((p) => p['isAvailable'])
-                      .toList()), // Available
-                  _buildPropertyList(_properties
-                      .where((p) => !p['isAvailable'])
-                      .toList()), // Unavailable
-                ],
-              ),
+              child: _isLoading
+                  ? Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(child: Text(_error!))
+                      : TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _buildPropertyList(_properties), // All properties
+                            _buildPropertyList(_properties
+                                .where((p) => p['isAvailable'] == true)
+                                .toList()), // Available
+                            _buildPropertyList(_properties
+                                .where((p) => p['isAvailable'] == false)
+                                .toList()), // Unavailable
+                          ],
+                        ),
             ),
           ],
         ),
       ),
       floatingActionButton: _showFloatingButton
           ? FloatingActionButton(
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => AddProperty(),
                   ),
                 );
+                _fetchProperties(); // Refresh after adding
               },
               backgroundColor: AppConfig.primaryColor,
               child: Icon(Icons.add, color: Colors.white),
@@ -114,7 +133,7 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
 
   Widget _buildTabBar() {
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16),
+      margin: EdgeInsets.only(left: 16, right: 16, bottom: 16),
       child: TabBar(
         controller: _tabController,
         labelColor: AppConfig.primaryColor,
@@ -129,17 +148,132 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
   }
 
   Widget _buildPropertyList(List<Map<String, dynamic>> properties) {
-    return ListView.builder(
-      padding: EdgeInsets.all(16),
-      itemCount:
-          properties.length + 1, // +1 for the Add Property button at bottom
-      itemBuilder: (context, index) {
-        if (index == properties.length) {
-          return SizedBox(height: 60); // Space for FAB
-        }
-        return _buildPropertyCard(properties[index]);
-      },
+    return RefreshIndicator(
+      onRefresh: _fetchProperties,
+      child: properties.isEmpty
+          ? Center(
+              child: ListView(
+                padding: EdgeInsets.all(16),
+                children: [
+                  SizedBox(height: 40),
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.home_work,
+                            size: 60, color: Colors.grey[400]),
+                        SizedBox(height: 16),
+                        Text(
+                          'No properties found',
+                          style:
+                              TextStyle(fontSize: 18, color: Colors.grey[600]),
+                        ), // Space for FAB
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: EdgeInsets.all(16),
+              itemCount: properties.length +
+                  1, // +1 for the Add Property button at bottom
+              itemBuilder: (context, index) {
+                if (index == properties.length) {
+                  return SizedBox(height: 60); // Space for FAB
+                }
+                return _buildPropertyCard(properties[index]);
+              },
+            ),
     );
+  }
+
+  // Show confirmation dialog before deleting a property
+  void _showDeleteConfirmation(Map<String, dynamic> property) {
+    // Store the current context for later use
+    final BuildContext currentContext = context;
+
+    showDialog<bool>(
+      context: currentContext,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text('Delete Property'),
+          content: Text(
+              'Are you sure you want to delete "${property['title']?.toString() ?? 'this property'}"? This action cannot be undone.'),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+            ),
+            TextButton(
+              child: Text('Delete',
+                  style: TextStyle(color: AppConfig.dangerColor)),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
+            ),
+          ],
+        );
+      },
+    ).then((bool? confirmed) async {
+      if (confirmed != true) return;
+
+      // Store context for loading dialog
+      BuildContext? loadingDialogContext;
+
+      // Show loading indicator
+      showDialog(
+        context: currentContext,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) {
+          loadingDialogContext = dialogContext;
+          return AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text("Deleting property..."),
+              ],
+            ),
+          );
+        },
+      );
+
+      try {
+        await Api.deleteProperty(property['id']);
+
+        // Close loading dialog safely
+        if (loadingDialogContext != null &&
+            Navigator.canPop(loadingDialogContext!)) {
+          Navigator.pop(loadingDialogContext!);
+        }
+
+        // Check if widget is still mounted before showing snackbar
+        if (mounted) {
+          ScaffoldMessenger.of(currentContext).showSnackBar(
+            SnackBar(content: Text('Property deleted successfully')),
+          );
+          // Refresh property list
+          _fetchProperties();
+        }
+      } catch (e) {
+        // Close loading dialog safely
+        if (loadingDialogContext != null &&
+            Navigator.canPop(loadingDialogContext!)) {
+          Navigator.pop(loadingDialogContext!);
+        }
+
+        // Check if widget is still mounted before showing snackbar
+        if (mounted) {
+          ScaffoldMessenger.of(currentContext).showSnackBar(
+            SnackBar(
+                content: Text('Failed to delete property: ${e.toString()}')),
+          );
+        }
+      }
+    });
   }
 
   Widget _buildPropertyCard(Map<String, dynamic> property) {
@@ -164,7 +298,12 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
           ClipRRect(
             borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
             child: Image.network(
-              property['image'],
+              // Use first image from the images array or a placeholder
+              (property['images'] != null &&
+                      property['images'] is List &&
+                      (property['images'] as List).isNotEmpty)
+                  ? property['images'][0].toString()
+                  : 'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg',
               height: 200,
               width: double.infinity,
               fit: BoxFit.cover,
@@ -191,7 +330,8 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            property['name'],
+                            property['title']?.toString() ??
+                                'Untitled Property',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -206,7 +346,8 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
                               SizedBox(width: 4),
                               Expanded(
                                 child: Text(
-                                  property['address'],
+                                  property['address']?.toString() ??
+                                      'No address provided',
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: Colors.grey[600],
@@ -222,7 +363,7 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          '\$${property['price']}',
+                          '₹${property['price']?.toString() ?? '0'}',
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -249,15 +390,17 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
                         Icon(
                           Icons.circle,
                           size: 12,
-                          color: property['isAvailable']
+                          color: property['isAvailable'] == true
                               ? AppConfig.successColor
                               : AppConfig.dangerColor,
                         ),
                         SizedBox(width: 8),
                         Text(
-                          property['isAvailable'] ? 'Available' : 'Unavailable',
+                          property['isAvailable'] == true
+                              ? 'Available'
+                              : 'Unavailable',
                           style: TextStyle(
-                            color: property['isAvailable']
+                            color: property['isAvailable'] == true
                                 ? AppConfig.successColor
                                 : AppConfig.dangerColor,
                           ),
@@ -267,8 +410,19 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
                     Row(
                       children: [
                         TextButton.icon(
-                          onPressed: () {
-                            // TODO: Implement edit functionality
+                          onPressed: () async {
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    EditProperty(property: property),
+                              ),
+                            );
+
+                            // Refresh property list if changes were made
+                            if (result == true) {
+                              _fetchProperties();
+                            }
                           },
                           icon: Icon(Icons.edit,
                               size: 20, color: AppConfig.primaryColor),
@@ -279,7 +433,7 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
                         ),
                         TextButton.icon(
                           onPressed: () {
-                            // TODO: Implement delete functionality
+                            _showDeleteConfirmation(property);
                           },
                           icon: Icon(Icons.delete,
                               size: 20, color: AppConfig.dangerColor),

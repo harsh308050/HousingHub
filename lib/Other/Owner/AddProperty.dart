@@ -6,10 +6,8 @@ import 'package:geolocator/geolocator.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:uuid/uuid.dart';
+import 'package:housinghub/Helper/API.dart';
 
 class AddProperty extends StatefulWidget {
   const AddProperty({super.key});
@@ -68,7 +66,9 @@ class _AddPropertyState extends State<AddProperty> {
     _addressController.dispose();
     _cityController.dispose();
     _stateController.dispose();
+    _pincodeController.dispose();
     _otherPropertyTypeController.dispose();
+    _priceController.dispose();
     _searchDebouncer?.cancel();
     super.dispose();
   }
@@ -258,18 +258,28 @@ class _AddPropertyState extends State<AddProperty> {
                     if (_currentStep != 0) SizedBox(width: 16),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () {
-                          if (_currentStep < 3) {
-                            if (_formKey.currentState!.validate()) {
-                              setState(() => _currentStep++);
-                            }
-                          } else {
-                            if (_formKey.currentState!.validate()) {
-                              // TODO: Implement form submission
-                              print('Form is valid, ready to submit');
-                            }
-                          }
-                        },
+                        onPressed: _isSubmitting
+                            ? null
+                            : () {
+                                if (_currentStep < 3) {
+                                  if (_formKey.currentState!.validate()) {
+                                    setState(() => _currentStep++);
+                                  }
+                                } else {
+                                  if (_formKey.currentState!.validate()) {
+                                    if (propertyImages.isEmpty) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                            content: Text(
+                                                'Please add at least one property image')),
+                                      );
+                                    } else {
+                                      _savePropertyToFirestore();
+                                    }
+                                  }
+                                }
+                              },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppConfig.primaryColor,
                           padding: EdgeInsets.symmetric(vertical: 16),
@@ -277,14 +287,37 @@ class _AddPropertyState extends State<AddProperty> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        child: Text(
-                          _currentStep == 3 ? 'Submit' : 'Next',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                        child: _isSubmitting && _currentStep == 3
+                            ? Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Submitting...',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Text(
+                                _currentStep == 3 ? 'Submit' : 'Next',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                       ),
                     ),
                   ],
@@ -1144,14 +1177,21 @@ class _AddPropertyState extends State<AddProperty> {
   List<File> propertyImages = [];
   File? propertyVideo;
   final ImagePicker _picker = ImagePicker();
+  bool _isSubmitting = false;
 
   Future<void> _pickImage(ImageSource source) async {
     try {
-      final XFile? pickedFile = await _picker.pickImage(source: source);
+      // Optimize by specifying image quality
+      final XFile? pickedFile = await _picker.pickImage(
+        source: source,
+        imageQuality:
+            70, // Reduce image quality to make uploads faster and smaller
+      );
       if (pickedFile != null) {
         setState(() {
           propertyImages.add(File(pickedFile.path));
         });
+        print('Image added: ${pickedFile.path}');
       }
     } catch (e) {
       print('Error picking image: $e');
@@ -1162,12 +1202,29 @@ class _AddPropertyState extends State<AddProperty> {
     try {
       final XFile? pickedFile = await _picker.pickVideo(
         source: ImageSource.gallery,
-        maxDuration: const Duration(minutes: 5), // 5 minutes max duration
+        maxDuration: const Duration(
+            minutes: 2), // Reduced to 2 minutes for better upload performance
+        // quality: VideoQuality.medium, // Uncomment if you want to set video quality
       );
       if (pickedFile != null) {
+        // Check file size before setting - Cloudinary free plan has a 10MB limit
+        final File file = File(pickedFile.path);
+        final int fileSizeInBytes = await file.length();
+        final double fileSizeInMB = fileSizeInBytes / (1024 * 1024);
+
+        if (fileSizeInMB > 50) {
+          print(
+              'Video file is too large: ${fileSizeInMB.toStringAsFixed(2)}MB');
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(
+                  'Video size exceeds 50MB. Please select a smaller video.')));
+          return;
+        }
+
         setState(() {
-          propertyVideo = File(pickedFile.path);
+          propertyVideo = file;
         });
+        print('Video added: ${pickedFile.path}');
       }
     } catch (e) {
       print('Error picking video: $e');
@@ -1202,6 +1259,138 @@ class _AddPropertyState extends State<AddProperty> {
         );
       },
     );
+  }
+
+  // Save property data to Firestore using API
+  Future<void> _savePropertyToFirestore() async {
+    if (_formKey.currentState!.validate()) {
+      try {
+        setState(() {
+          _isSubmitting = true;
+        });
+
+        // Show loading dialog
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              content: Row(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(width: 20),
+                  Text("Adding property..."),
+                ],
+              ),
+            );
+          },
+        );
+
+        // Get current user
+        final User? user = FirebaseAuth.instance.currentUser;
+        if (user == null) {
+          Navigator.of(context).pop(); // Close loading dialog
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('You must be logged in to add a property')),
+          );
+          return;
+        }
+
+        print('Current user: ${user.email}');
+
+        // Create property data map
+        print('Creating property data map');
+        Map<String, dynamic> propertyData = {
+          'title': _titleController.text,
+          'description': _descriptionController.text,
+          'propertyType': _propertyType == 'Others'
+              ? _otherPropertyTypeController.text
+              : _propertyType,
+          'bedrooms': _bedrooms,
+          'bathrooms': _bathrooms,
+          'squareFootage': int.parse(_squareFootageController.text),
+          'price': int.parse(_priceController.text),
+          'address': _addressController.text,
+          'city': _cityController.text,
+          'state': _stateController.text,
+          'pincode': _pincodeController.text,
+          'latitude': _latitude,
+          'longitude': _longitude,
+          'maleAllowed': _isMaleAllowed,
+          'femaleAllowed': _isFemaleAllowed,
+          'roomType': _selectedRoomType,
+          'amenities': _amenities.entries
+              .where((entry) => entry.value)
+              .map((entry) => entry.key)
+              .toList(),
+        };
+
+        print('Property data map created');
+
+        try {
+          // Use the API to add the property
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('Uploading media and saving property data...')),
+          );
+
+          String propertyId = await Api.addProperty(
+              propertyData, propertyImages, propertyVideo);
+
+          print('Successfully saved property with ID: $propertyId');
+
+          // Close loading dialog
+          Navigator.of(context).pop();
+
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Property added successfully!')),
+          );
+
+          // Navigate back after a short delay
+          Future.delayed(Duration(seconds: 1), () {
+            Navigator.of(context).pop();
+          });
+        } catch (e) {
+          print('Error saving property: $e');
+          throw Exception('Failed to save property to database: $e');
+        }
+      } catch (e) {
+        // Close loading dialog
+        if (Navigator.canPop(context)) {
+          Navigator.of(context).pop();
+        }
+
+        print('Error in _savePropertyToFirestore: $e');
+
+        // Show detailed error message
+        String errorMessage = 'Error adding property: $e';
+        if (e.toString().contains('DioException')) {
+          errorMessage =
+              'Error uploading media: There was a problem with the Cloudinary upload. Please check your internet connection and try again.';
+        } else if (e.toString().contains('permission-denied')) {
+          errorMessage =
+              'Permission denied: You do not have permission to add a property.';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            duration: Duration(seconds: 8),
+            action: SnackBarAction(
+              label: 'OK',
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              },
+            ),
+          ),
+        );
+      } finally {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
   }
 
   Widget _buildMediaStep() {
