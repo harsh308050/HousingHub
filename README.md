@@ -1,12 +1,10 @@
 # HousingHub
 
-<p align="center">
-  <img src="assets/images/Logo.png" alt="HousingHub Logo" width="200"/>
-</p>
+<img src="assets/images/Logo.png" alt="HousingHub Logo" width="200"/>
 
-## 📱 Project Overview
+## 📱 Project Overview *(Under Development)*
 
-HousingHub is a mobile application that connects tenants searching for PG accommodations with property owners who want to list their properties. The app focuses on easy property discovery, seamless booking management, and direct tenant-owner communication.
+HousingHub is a mobile application that connects tenants searching for accommodations with property owners who want to list their properties. The app focuses on easy property discovery, seamless booking management, and direct tenant-owner communication.
 
 ## ⚙️ Tech Stack
 
@@ -14,7 +12,7 @@ HousingHub is a mobile application that connects tenants searching for PG accomm
 - **Backend & Database**: Firebase
   - Firestore (NoSQL Database)
   - Firebase Authentication (Email/Password and Google Sign-in)
-  - Firebase Storage (for property images)
+  - Cloudinary Storage (for property images)
 - **Payment Integration**: Razorpay (for booking payments)
 
 ## 🗂️ Database Schema
@@ -77,23 +75,6 @@ HousingHub is a mobile application that connects tenants searching for PG accomm
 - **Profile Management**
   - Update personal details
 
-## 🎨 UI Components
-
-- **Color Scheme**
-  - Primary: Defined in AppConfig
-  - Success: Green for available properties
-  - Danger: Red for unavailable properties
-
-- **Screens**
-  - Login & Signup
-  - Property listings
-  - Property details
-  - Add/Edit property
-  - User profile
-
-## 📱 Screenshots
-
-*(Coming soon)*
 
 ## 🚀 Installation & Setup
 
@@ -122,22 +103,13 @@ HousingHub is a mobile application that connects tenants searching for PG accomm
    flutter run
    ```
 
-## 🔮 Future Enhancements
-
-- Implement in-app messaging between tenants and owners
-- Add Google Maps integration for property locations
-- Implement push notifications for booking updates
-- Add advanced filtering options
-- Add payment integration for secure transactions
-- Implement document verification for property owners
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## 👨‍💻 Contributors
 
-- Harsh (Developer)
+- Harsh Parmar (Developer)
 
 ---
 
