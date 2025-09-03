@@ -12,34 +12,54 @@ import 'package:http/http.dart' as http;
 class Property {
   final String id;
   final String ownerId;
+  final String? ownerEmail;
   final String title;
   final String description;
   final String price;
   final String location;
   final String city;
+  final String? state;
+  final String? pincode;
   final List<String> images;
   final double? rating;
   final bool available;
   final String propertyType;
   final String roomType;
   final int? squareFootage;
+  final int? bedrooms;
+  final int? bathrooms;
+  final bool? femaleAllowed;
+  final bool? maleAllowed;
   final List<String> amenities;
+  final double? latitude;
+  final double? longitude;
+  final DateTime? createdAt;
 
   Property({
     required this.id,
     required this.ownerId,
+    this.ownerEmail,
     required this.title,
     required this.description,
     required this.price,
     required this.location,
     required this.city,
+    this.state,
+    this.pincode,
     required this.images,
     this.rating,
     required this.available,
     required this.propertyType,
     required this.roomType,
     this.squareFootage,
+    this.bedrooms,
+    this.bathrooms,
+    this.femaleAllowed,
+    this.maleAllowed,
     required this.amenities,
+    this.latitude,
+    this.longitude,
+    this.createdAt,
   });
 
   // Get primary image URL (first in list or default)
@@ -87,6 +107,14 @@ class Property {
       }
     }
 
+    // Parse createdAt timestamp
+    DateTime? createdAt;
+    if (data['createdAt'] != null) {
+      if (data['createdAt'] is Timestamp) {
+        createdAt = (data['createdAt'] as Timestamp).toDate();
+      }
+    }
+
     // Format price with currency symbol if it's a number
     String formattedPrice = '';
     if (data['price'] != null) {
@@ -102,11 +130,14 @@ class Property {
     return Property(
       id: doc.id,
       ownerId: ownerId,
+      ownerEmail: data['ownerEmail'] as String?,
       title: data['title'] ?? 'Property',
       description: data['description'] ?? 'No description available',
       price: formattedPrice,
       location: data['address'] ?? 'Location not specified',
       city: data['city'] ?? '',
+      state: data['state'] as String?,
+      pincode: data['pincode'] as String?,
       images: imagesList,
       rating:
           data['rating'] != null ? (data['rating'] as num).toDouble() : null,
@@ -116,7 +147,14 @@ class Property {
       squareFootage: data['squareFootage'] is num
           ? (data['squareFootage'] as num).toInt()
           : null,
+      bedrooms: data['bedrooms'] is num ? (data['bedrooms'] as num).toInt() : null,
+      bathrooms: data['bathrooms'] is num ? (data['bathrooms'] as num).toInt() : null,
+      femaleAllowed: data['femaleAllowed'] as bool?,
+      maleAllowed: data['maleAllowed'] as bool?,
       amenities: amenitiesList,
+      latitude: data['latitude'] is num ? (data['latitude'] as num).toDouble() : null,
+      longitude: data['longitude'] is num ? (data['longitude'] as num).toDouble() : null,
+      createdAt: createdAt,
     );
   }
 
@@ -125,11 +163,15 @@ class Property {
     return {
       'id': id,
       'ownerId': ownerId,
+      'ownerEmail': ownerEmail,
       'title': title,
       'description': description,
       'price': price,
       'location': location,
+      'address': location, // Include address for backward compatibility
       'city': city,
+      'state': state,
+      'pincode': pincode,
       'images': images,
       'imageUrl': imageUrl, // Include primary image for backward compatibility
       'rating': rating,
@@ -137,7 +179,14 @@ class Property {
       'propertyType': propertyType,
       'roomType': roomType,
       'squareFootage': squareFootage,
+      'bedrooms': bedrooms,
+      'bathrooms': bathrooms,
+      'femaleAllowed': femaleAllowed,
+      'maleAllowed': maleAllowed,
       'amenities': amenities,
+      'latitude': latitude,
+      'longitude': longitude,
+      'createdAt': createdAt?.toIso8601String(), // Convert DateTime to string
     };
   }
 }

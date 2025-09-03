@@ -286,6 +286,8 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
   String _currentCity = 'Loading...';
   bool _isLoading = false;
   bool _showCityPicker = false;
+  // Track which tab is selected in the city picker: true = State, false = City
+  bool _isStateTabSelected = true;
   List<String> _states = [];
   List<String> _cities = [];
   Map<String, String> _stateCodeMap = {};
@@ -462,6 +464,9 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
           onTap: () {
             setState(() {
               _selectedState = _filteredStates[index];
+              _filteredCities = [];
+              _cities = [];
+              _isStateTabSelected = false; // Automatically switch to City tab
               _fetchCities(_selectedState!);
             });
           },
@@ -509,6 +514,11 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                       onTap: () {
                         setState(() {
                           _showCityPicker = !_showCityPicker;
+                          if (_showCityPicker) {
+                            // Always show State tab first when opening picker
+                            _isStateTabSelected = true;
+                            _selectedState = null;
+                          }
                         });
                       },
                       child: Row(
@@ -570,6 +580,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                               child: GestureDetector(
                                 onTap: () {
                                   setState(() {
+                                    _isStateTabSelected = true;
                                     _selectedState = null;
                                   });
                                 },
@@ -578,7 +589,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                                   decoration: BoxDecoration(
                                     border: Border(
                                       bottom: BorderSide(
-                                        color: _selectedState == null
+                                        color: _isStateTabSelected
                                             ? AppConfig.primaryColor
                                             : Colors.transparent,
                                         width: 2,
@@ -590,7 +601,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                                       'State',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        color: _selectedState == null
+                                        color: _isStateTabSelected
                                             ? AppConfig.primaryColor
                                             : Colors.grey,
                                       ),
@@ -603,7 +614,9 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                               child: GestureDetector(
                                 onTap: () {
                                   if (_selectedState != null) {
-                                    setState(() {});
+                                    setState(() {
+                                      _isStateTabSelected = false;
+                                    });
                                   }
                                 },
                                 child: Container(
@@ -611,7 +624,8 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                                   decoration: BoxDecoration(
                                     border: Border(
                                       bottom: BorderSide(
-                                        color: _selectedState != null
+                                        color: !_isStateTabSelected &&
+                                                _selectedState != null
                                             ? AppConfig.primaryColor
                                             : Colors.transparent,
                                         width: 2,
@@ -623,7 +637,8 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                                       'City',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        color: _selectedState != null
+                                        color: !_isStateTabSelected &&
+                                                _selectedState != null
                                             ? AppConfig.primaryColor
                                             : Colors.grey,
                                       ),
@@ -641,7 +656,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                         padding: EdgeInsets.all(8.0),
                         child: TextField(
                           decoration: InputDecoration(
-                            hintText: _selectedState == null
+                            hintText: _isStateTabSelected
                                 ? 'Search state'
                                 : 'Search city',
                             prefixIcon: Icon(Icons.search),
@@ -653,7 +668,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                           ),
                           onChanged: (value) {
                             setState(() {
-                              if (_selectedState == null) {
+                              if (_isStateTabSelected) {
                                 _filteredStates = _states
                                     .where((state) => state
                                         .toLowerCase()
@@ -675,7 +690,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                       Expanded(
                         child: _isLoading
                             ? Center(child: CircularProgressIndicator())
-                            : _selectedState == null
+                            : _isStateTabSelected
                                 ? _buildStatesList()
                                 : _buildCitiesList(),
                       ),
@@ -874,15 +889,14 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                                       ),
                                     ),
                                     SizedBox(height: 10),
-                                    ElevatedButton.icon(
+                                    ElevatedButton(
                                       onPressed: () {
                                         // Show city picker to let user change city
                                         setState(() {
                                           _showCityPicker = true;
                                         });
                                       },
-                                      icon: Icon(Icons.location_city),
-                                      label: Text('Change City'),
+                                      child: Text('Change City'),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: AppConfig.primaryColor,
                                         foregroundColor: Colors.white,
@@ -1001,11 +1015,11 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Property Image
+            // Property Image with gradient overlay
             Stack(
               children: [
                 Container(
-                  height: height * 0.65,
+                  height: height * 0.7,
                   width: double.infinity,
                   decoration: BoxDecoration(
                     borderRadius:
@@ -1071,6 +1085,29 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                           ),
                   ),
                 ),
+
+                // Gradient overlay only at the bottom of the image
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: height * 0.5, // controls gradient coverage
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius:
+                          BorderRadius.vertical(bottom: Radius.circular(12)),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.7),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
                 // Property type badge
                 Positioned(
                   top: 8,
@@ -1091,38 +1128,27 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                     ),
                   ),
                 ),
-                // Property title banner
+
+                // Property title text (over gradient)
                 Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withOpacity(0.7)
-                        ],
-                      ),
+                  bottom: 8,
+                  left: 10,
+                  right: 10,
+                  child: Text(
+                    property.title,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
                     ),
-                    child: Text(
-                      property.title,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
-            // Property Info
+
+            // Property Info section (below image)
             Padding(
               padding: EdgeInsets.all(12),
               child: Column(
@@ -1133,7 +1159,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                     children: [
                       Expanded(
                         child: Text(
-                          property.price,
+                          property.price + " /month",
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
@@ -1179,6 +1205,227 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
       ),
     );
   }
+
+  // Widget _buildPropertyCardFromProperty({
+  //   required Property property,
+  //   required double width,
+  //   required double height,
+  // }) {
+  //   print(
+  //       'Building property card for: ${property.title} in ${property.city}, image: ${property.imageUrl}');
+
+  //   return GestureDetector(
+  //     onTap: () {
+  //       print('Navigating to property detail: ${property.id}');
+  //       Navigator.push(
+  //         context,
+  //         MaterialPageRoute(
+  //           builder: (context) => TenantPropertyDetail(
+  //             propertyId: property.id,
+  //             price: property.price,
+  //             location: property.location,
+  //             imagePath: property.imageUrl,
+  //             propertyData: property.toMap(),
+  //           ),
+  //         ),
+  //       );
+  //     },
+  //     child: Container(
+  //       width: width,
+  //       height: height,
+  //       margin: EdgeInsets.only(bottom: 8),
+  //       decoration: BoxDecoration(
+  //         color: Colors.white,
+  //         borderRadius: BorderRadius.circular(12),
+  //         boxShadow: [
+  //           BoxShadow(
+  //             color: Colors.black.withOpacity(0.05),
+  //             blurRadius: 5,
+  //             spreadRadius: 1,
+  //           ),
+  //         ],
+  //       ),
+  //       child: Column(
+  //         crossAxisAlignment: CrossAxisAlignment.start,
+  //         children: [
+  //           // Property Image
+  //           Stack(
+  //             children: [
+  //               Container(
+  //                 height: height * 0.65,
+  //                 width: double.infinity,
+  //                 decoration: BoxDecoration(
+  //                   borderRadius:
+  //                       BorderRadius.vertical(top: Radius.circular(12)),
+  //                 ),
+  //                 child: ClipRRect(
+  //                   borderRadius:
+  //                       BorderRadius.vertical(top: Radius.circular(12)),
+  //                   child: property.images.isNotEmpty
+  //                       ? Image.network(
+  //                           property.images.first,
+  //                           fit: BoxFit.cover,
+  //                           loadingBuilder: (context, child, loadingProgress) {
+  //                             if (loadingProgress == null) return child;
+  //                             return Container(
+  //                               color: Colors.grey[200],
+  //                               child: Center(
+  //                                 child: CircularProgressIndicator(
+  //                                   value: loadingProgress.expectedTotalBytes !=
+  //                                           null
+  //                                       ? loadingProgress
+  //                                               .cumulativeBytesLoaded /
+  //                                           (loadingProgress
+  //                                                   .expectedTotalBytes ??
+  //                                               1)
+  //                                       : null,
+  //                                   valueColor: AlwaysStoppedAnimation<Color>(
+  //                                       AppConfig.primaryColor),
+  //                                 ),
+  //                               ),
+  //                             );
+  //                           },
+  //                           errorBuilder: (context, error, stackTrace) {
+  //                             print(
+  //                                 'Error loading image: $error for URL ${property.images.first}');
+  //                             return Container(
+  //                               color: Colors.grey[300],
+  //                               child: Center(
+  //                                 child: Column(
+  //                                   mainAxisAlignment: MainAxisAlignment.center,
+  //                                   children: [
+  //                                     Icon(Icons.broken_image,
+  //                                         color: Colors.grey[500]),
+  //                                     SizedBox(height: 4),
+  //                                     Text(
+  //                                       'Image unavailable',
+  //                                       style: TextStyle(
+  //                                           color: Colors.grey[600],
+  //                                           fontSize: 12),
+  //                                     ),
+  //                                   ],
+  //                                 ),
+  //                               ),
+  //                             );
+  //                           },
+  //                         )
+  //                       : Container(
+  //                           color: Colors.grey[300],
+  //                           child: Center(
+  //                             child: Icon(Icons.home,
+  //                                 color: Colors.grey[500], size: 40),
+  //                           ),
+  //                         ),
+  //                 ),
+  //               ),
+  //               // Property type badge
+  //               Positioned(
+  //                 top: 8,
+  //                 right: 8,
+  //                 child: Container(
+  //                   padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+  //                   decoration: BoxDecoration(
+  //                     color: AppConfig.primaryColor,
+  //                     borderRadius: BorderRadius.circular(12),
+  //                   ),
+  //                   child: Text(
+  //                     property.propertyType,
+  //                     style: TextStyle(
+  //                       color: Colors.white,
+  //                       fontWeight: FontWeight.bold,
+  //                       fontSize: 10,
+  //                     ),
+  //                   ),
+  //                 ),
+  //               ),
+  //               // Property title banner
+  //               Positioned(
+  //                 bottom: 0,
+  //                 left: 0,
+  //                 right: 0,
+  //                 child: Container(
+  //                   padding: EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+  //                   decoration: BoxDecoration(
+  //                     gradient: LinearGradient(
+  //                       begin: Alignment.topCenter,
+  //                       end: Alignment.bottomCenter,
+  //                       colors: [
+  //                         Colors.transparent,
+  //                         Colors.black.withOpacity(0.7)
+  //                       ],
+  //                     ),
+  //                   ),
+  //                   child: Text(
+  //                     property.title,
+  //                     style: TextStyle(
+  //                       color: Colors.white,
+  //                       fontWeight: FontWeight.bold,
+  //                       fontSize: 14,
+  //                     ),
+  //                     maxLines: 1,
+  //                     overflow: TextOverflow.ellipsis,
+  //                   ),
+  //                 ),
+  //               ),
+  //             ],
+  //           ),
+  //           // Property Info
+  //           Padding(
+  //             padding: EdgeInsets.all(12),
+  //             child: Column(
+  //               crossAxisAlignment: CrossAxisAlignment.start,
+  //               children: [
+  //                 Row(
+  //                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //                   children: [
+  //                     Expanded(
+  //                       child: Text(
+  //                         property.price + " /month",
+  //                         style: TextStyle(
+  //                           fontWeight: FontWeight.bold,
+  //                           fontSize: 16,
+  //                         ),
+  //                         maxLines: 1,
+  //                         overflow: TextOverflow.ellipsis,
+  //                       ),
+  //                     ),
+  //                     Text(
+  //                       property.roomType,
+  //                       style: TextStyle(
+  //                         color: Colors.grey[800],
+  //                         fontWeight: FontWeight.w500,
+  //                         fontSize: 13,
+  //                       ),
+  //                     ),
+  //                   ],
+  //                 ),
+  //                 SizedBox(height: 4),
+  //                 Row(
+  //                   children: [
+  //                     Icon(Icons.location_on,
+  //                         size: 14, color: Colors.grey[600]),
+  //                     SizedBox(width: 2),
+  //                     Expanded(
+  //                       child: Text(
+  //                         property.location,
+  //                         style: TextStyle(
+  //                           color: Colors.grey[600],
+  //                           fontSize: 13,
+  //                         ),
+  //                         maxLines: 1,
+  //                         overflow: TextOverflow.ellipsis,
+  //                       ),
+  //                     ),
+  //                   ],
+  //                 ),
+  //               ],
+  //             ),
+  //           ),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 
   Widget _buildPropertyCard({
     required String price,
