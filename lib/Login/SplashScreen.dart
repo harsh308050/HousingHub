@@ -100,7 +100,7 @@ class _SplashscreenState extends State<Splashscreen> {
                     AppConfig.primaryVariant.withAlpha(186),
                   ],
                   textStyle: TextStyle(
-                    fontSize: 40.0,
+                    fontSize: 30.0,
                     fontWeight: FontWeight.bold,
                   ),
                 ),

@@ -6,6 +6,7 @@ class TenantPropertyDetail extends StatefulWidget {
   final String? price;
   final String? location;
   final String? imagePath;
+  final Map<String, dynamic>? propertyData;
 
   const TenantPropertyDetail({
     Key? key,
@@ -13,6 +14,7 @@ class TenantPropertyDetail extends StatefulWidget {
     this.price,
     this.location,
     this.imagePath,
+    this.propertyData,
   }) : super(key: key);
 
   @override
@@ -32,10 +34,22 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail> {
             expandedHeight: 250,
             pinned: true,
             flexibleSpace: FlexibleSpaceBar(
-              background: Image.asset(
-                widget.imagePath ?? 'assets/images/Logo.png',
-                fit: BoxFit.cover,
-              ),
+              background: widget.imagePath != null &&
+                      widget.imagePath!.startsWith('http')
+                  ? Image.network(
+                      widget.imagePath!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Image.asset(
+                          'assets/images/Logo.png',
+                          fit: BoxFit.cover,
+                        );
+                      },
+                    )
+                  : Image.asset(
+                      'assets/images/Logo.png',
+                      fit: BoxFit.cover,
+                    ),
             ),
             leading: CircleAvatar(
               backgroundColor: Colors.white.withOpacity(0.8),
@@ -94,10 +108,16 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail> {
                         ),
                       ),
                       Row(
+                        spacing: 5,
                         children: [
-                          Icon(Icons.star, color: Colors.amber),
+                          Icon(
+                            Icons.star_border_purple500_outlined,
+                            color: Colors.amber,
+                            size: 18,
+                          ),
                           Text(
-                            '4.8',
+                            // widget.rating?.toStringAsFixed(1) ?? '0.0'
+                            '0.0',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

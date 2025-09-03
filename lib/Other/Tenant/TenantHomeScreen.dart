@@ -1,10 +1,6 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'TenantPropertyDetail.dart';
@@ -12,6 +8,8 @@ import 'TenantSearchScreen.dart';
 import 'TenantBookmarkScreen.dart';
 import 'TenantMessageScreen.dart';
 import 'TenantProfileScreen.dart';
+
+// Using Property class from API.dart
 
 class TenantHomeScreen extends StatefulWidget {
   const TenantHomeScreen({super.key});
@@ -58,12 +56,10 @@ class _TenantHomeScreenState extends State<TenantHomeScreen> {
     ];
   }
 
-  // Update city across the app when selected from HomeTab
   void _updateCity(String city, String? state) {
     setState(() {
       _currentCity = city;
       _selectedState = state;
-      // Update screens with new city data
       _updateScreensWithNewData();
     });
   }
@@ -90,6 +86,42 @@ class _TenantHomeScreenState extends State<TenantHomeScreen> {
       // Check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
+        // If permission is granted but location is off, prompt user
+        if (permission == LocationPermission.always ||
+            permission == LocationPermission.whileInUse) {
+          // ignore: use_build_context_synchronously
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: Text('Enable Location'),
+              content: Text(
+                  'Location services are turned off. Would you like to open settings to enable location?'),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _checkAndRetryLocation();
+                  },
+                  child: Text('Not Now'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    await Geolocator.openLocationSettings();
+                    // Add a small delay to allow user time to change settings
+                    await Future.delayed(Duration(seconds: 3));
+                    _checkAndRetryLocation();
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppConfig.primaryColor,
+                  ),
+                  child: Text('Open Settings'),
+                ),
+              ],
+            ),
+          );
+        }
         setState(() {
           _currentCity = 'Select City';
           _isLocationDetected = true;
@@ -101,28 +133,16 @@ class _TenantHomeScreenState extends State<TenantHomeScreen> {
       Position position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.medium);
 
-      // Get address from lat/lng
-      List<Placemark> placemarks =
-          await placemarkFromCoordinates(position.latitude, position.longitude);
+      // Use API to get city and state from coordinates
+      Map<String, String?> locationData =
+          await Api.getCityFromLocation(position.latitude, position.longitude);
 
-      if (placemarks.isNotEmpty) {
-        final Placemark place = placemarks.first;
-        String? detectedState = place.administrativeArea;
-        String? detectedCity = place.locality ?? place.subAdministrativeArea;
-
-        setState(() {
-          _currentCity = detectedCity ?? 'Unknown City';
-          _selectedState = detectedState;
-          _isLocationDetected = true;
-          _updateScreensWithNewData();
-        });
-      } else {
-        setState(() {
-          _currentCity = 'Unknown City';
-          _isLocationDetected = true;
-          _updateScreensWithNewData();
-        });
-      }
+      setState(() {
+        _currentCity = locationData['city'] ?? 'Unknown City';
+        _selectedState = locationData['state'];
+        _isLocationDetected = true;
+        _updateScreensWithNewData();
+      });
     } catch (e) {
       setState(() {
         _currentCity = 'Select City';
@@ -130,6 +150,26 @@ class _TenantHomeScreenState extends State<TenantHomeScreen> {
         _updateScreensWithNewData();
       });
       print('Error getting location: $e');
+    }
+  }
+
+  // Check if location is enabled and retry location detection
+  Future<void> _checkAndRetryLocation() async {
+    // Reset location detection flag to allow retry
+    _isLocationDetected = false;
+
+    // Check if location is now enabled
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (serviceEnabled) {
+      // If location is now enabled, retry detection
+      _detectLocationOnce();
+    } else {
+      // If still not enabled, leave the default city
+      setState(() {
+        _currentCity = 'Select City';
+        _isLocationDetected = true;
+        _updateScreensWithNewData();
+      });
     }
   }
 
@@ -189,7 +229,7 @@ class _TenantHomeScreenState extends State<TenantHomeScreen> {
       },
       selectedItemColor: AppConfig.primaryColor,
       unselectedItemColor: Colors.grey,
-      showUnselectedLabels: true,
+      showUnselectedLabels: false,
       type: BottomNavigationBarType.fixed,
       items: const [
         BottomNavigationBarItem(
@@ -253,17 +293,27 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
   List<String> _filteredStates = [];
   List<String> _filteredCities = [];
 
+  // Properties data
+  List<Property> _nearbyProperties = [];
+  bool _loadingProperties = true;
+  String? _propertyError;
+
   @override
   void initState() {
     super.initState();
     // Use city data from parent widget
     _currentCity = widget.currentCity;
     _selectedState = widget.selectedState;
-    
+
+    print('TenantHomeTab initialized with city: $_currentCity');
+
     // Only fetch states for the city picker, not location
     _fetchStates();
+
+    // Fetch properties based on current city
+    _fetchPropertiesNearby();
   }
-  
+
   @override
   void didUpdateWidget(TenantHomeTab oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -272,47 +322,91 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
       setState(() {
         _currentCity = widget.currentCity;
       });
+
+      // Refresh properties when city changes
+      _fetchPropertiesNearby();
     }
-    
+
     if (oldWidget.selectedState != widget.selectedState) {
       setState(() {
         _selectedState = widget.selectedState;
       });
     }
-  }  String stateCityAPI =
-      "YTBrQWhHWEVWUk9SSEVSYllzbVNVTUJWRm1oaFBpN2FWeTRKbFpqbQ==";
+  }
+
+  // Fetch properties near the current city
+  Future<void> _fetchPropertiesNearby() async {
+    if (_currentCity == 'Loading...' ||
+        _currentCity == 'Select City' ||
+        _currentCity == 'Unknown City') {
+      setState(() {
+        _nearbyProperties = [];
+        _loadingProperties = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _loadingProperties = true;
+      _propertyError = null;
+    });
+
+    try {
+      print('Searching for properties in city: $_currentCity');
+
+      // Fetch properties using API
+      List<Property> properties = await Api.getPropertiesByCity(_currentCity);
+      print('Total properties loaded: ${properties.length}');
+
+      if (mounted) {
+        setState(() {
+          _nearbyProperties = properties;
+          _loadingProperties = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching properties: $e');
+      if (mounted) {
+        setState(() {
+          _propertyError = 'Failed to load properties: $e';
+          _loadingProperties = false;
+        });
+      }
+    }
+  }
 
   Future<void> _fetchStates() async {
     try {
-      final response = await http.get(
-        Uri.parse('https://api.countrystatecity.in/v1/countries/IN/states'),
-        headers: {'X-CSCAPI-KEY': '$stateCityAPI'},
-      );
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        if (mounted) {
-          setState(() {
-            _states = [];
-            _stateCodeMap = {};
+      setState(() {
+        _isLoading = true;
+      });
 
-            for (var state in data) {
-              String stateName = state['name'].toString();
-              String stateCode = state['iso2'].toString();
-              _states.add(stateName);
-              _stateCodeMap[stateName] = stateCode;
-            }
+      // Get states list from API service
+      List<Map<String, String>> statesData = await Api.getIndianStates();
 
-            // Sort states alphabetically
-            _states.sort();
+      if (mounted) {
+        setState(() {
+          _states = [];
+          _stateCodeMap = {};
 
-            // Initialize filtered states
-            _filteredStates = List.from(_states);
-          });
-        }
-      } else {
-        throw Exception('Failed to load states');
+          for (var stateData in statesData) {
+            String stateName = stateData['name'] ?? '';
+            String stateCode = stateData['code'] ?? '';
+            _states.add(stateName);
+            _stateCodeMap[stateName] = stateCode;
+          }
+
+          // Initialize filtered states
+          _filteredStates = List.from(_states);
+          _isLoading = false;
+        });
       }
     } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
       print('Error fetching states: $e');
     }
   }
@@ -329,24 +423,15 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
 
       String stateCode = _stateCodeMap[stateName]!;
 
-      final response = await http.get(
-        Uri.parse(
-            'https://api.countrystatecity.in/v1/countries/IN/states/$stateCode/cities'),
-        headers: {'X-CSCAPI-KEY': '$stateCityAPI'},
-      );
+      // Get cities for state from API service
+      List<String> citiesData = await Api.getCitiesForState(stateCode);
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        if (mounted) {
-          setState(() {
-            _cities = data.map((city) => city['name'].toString()).toList();
-            _cities.sort();
-            _filteredCities = List.from(_cities);
-            _isLoading = false;
-          });
-        }
-      } else {
-        throw Exception('Failed to load cities');
+      if (mounted) {
+        setState(() {
+          _cities = citiesData;
+          _filteredCities = List.from(_cities);
+          _isLoading = false;
+        });
       }
     } catch (e) {
       setState(() {
@@ -428,8 +513,8 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                       },
                       child: Row(
                         children: [
-                          Icon(Icons.location_on,
-                              size: 16, color: AppConfig.primaryColor),
+                          Icon(Icons.location_on_outlined,
+                              size: 20, color: AppConfig.primaryColor),
                           SizedBox(width: 4),
                           Text(
                             _isLoading ? 'Loading...' : _currentCity,
@@ -621,92 +706,211 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                 height: height * 0.18,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
                   borderRadius: BorderRadius.circular(12),
                   image: DecorationImage(
-                    image: AssetImage('assets/images/Logo.png'),
+                    image: NetworkImage(
+                      'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg',
+                    ),
                     fit: BoxFit.cover,
                   ),
                 ),
                 child: Stack(
                   children: [
+                    // Gradient overlay only at the bottom
                     Positioned(
                       bottom: 0,
                       left: 0,
                       right: 0,
+                      height: height *
+                          0.15, // adjust how much gradient should cover
                       child: Container(
-                        padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.vertical(
-                              bottom: Radius.circular(12)),
+                            bottom: Radius.circular(12),
+                          ),
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [Colors.transparent, Colors.black54],
+                            colors: [
+                              Colors.transparent,
+                              Colors.black, // darker at the bottom
+                            ],
                           ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Get 50% Off',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 20,
-                              ),
+                      ),
+                    ),
+
+                    // Text stays above gradient
+                    Positioned(
+                      bottom: 8,
+                      left: 16,
+                      right: 16,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Get Upto 50% Off',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
                             ),
-                            Text(
-                              'On your first month\'s rent',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                              ),
+                          ),
+                          Text(
+                            'On your first month\'s rent',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
 
-              // Popular Near You Section
+              // Properties Near You Section
               SizedBox(height: height * 0.02),
-              Text(
-                'Popular Near You',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Properties Near You',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      if (!_loadingProperties)
+                        IconButton(
+                          icon: Icon(Icons.refresh, size: 20),
+                          onPressed: () {
+                            _fetchPropertiesNearby();
+                          },
+                          tooltip: 'Refresh properties',
+                        ),
+                      if (_loadingProperties)
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                AppConfig.primaryColor),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
               ),
               SizedBox(height: height * 0.01),
 
-              // Popular Properties Row
+              // Properties Near You Row
               Container(
                 height: height * 0.28,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _buildPropertyCard(
-                      price: '\$1,200/mo',
-                      location: 'Upper East Side',
-                      rating: '4.8',
-                      imagePath: 'assets/images/Logo.png',
-                      width: width * 0.6,
-                      height: height * 0.26,
-                    ),
-                    SizedBox(width: 12),
-                    _buildPropertyCard(
-                      price: '\$1,500/mo',
-                      location: 'Brooklyn',
-                      rating: null,
-                      imagePath: 'assets/images/Logo.png',
-                      width: width * 0.6,
-                      height: height * 0.26,
-                    ),
-                  ],
-                ),
+                child: _loadingProperties
+                    ? Center(
+                        child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                AppConfig.primaryColor),
+                          ),
+                          SizedBox(height: 10),
+                          Text(
+                            'Loading properties in $_currentCity...',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                        ],
+                      ))
+                    : _propertyError != null
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.error_outline,
+                                    color: Colors.red[300], size: 32),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Error loading properties',
+                                  style: TextStyle(color: Colors.grey[600]),
+                                ),
+                                Text(
+                                  _propertyError!.length > 50
+                                      ? '${_propertyError!.substring(0, 50)}...'
+                                      : _propertyError!,
+                                  style: TextStyle(
+                                      color: Colors.red[300], fontSize: 12),
+                                ),
+                                SizedBox(height: 10),
+                                ElevatedButton.icon(
+                                  onPressed: () => _fetchPropertiesNearby(),
+                                  icon: Icon(Icons.refresh),
+                                  label: Text('Retry'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppConfig.primaryColor,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : _nearbyProperties.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.home_outlined,
+                                        color: Colors.grey[400], size: 32),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      'No properties available in $_currentCity',
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                    SizedBox(height: 10),
+                                    ElevatedButton.icon(
+                                      onPressed: () {
+                                        // Show city picker to let user change city
+                                        setState(() {
+                                          _showCityPicker = true;
+                                        });
+                                      },
+                                      icon: Icon(Icons.location_city),
+                                      label: Text('Change City'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppConfig.primaryColor,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: _nearbyProperties.length,
+                                itemBuilder: (context, index) {
+                                  final property = _nearbyProperties[index];
+                                  return Padding(
+                                    padding: EdgeInsets.only(
+                                      right:
+                                          index < _nearbyProperties.length - 1
+                                              ? 12
+                                              : 0,
+                                    ),
+                                    child: _buildPropertyCardFromProperty(
+                                      property: property,
+                                      width: width * 0.6,
+                                      height: height * 0.26,
+                                    ),
+                                  );
+                                },
+                              ),
               ),
 
               // Recently Viewed Section
@@ -730,7 +934,8 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                       price: '\$1,400/mo',
                       location: 'SoHo',
                       rating: null,
-                      imagePath: 'assets/images/Logo.png',
+                      imagePath:
+                          'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg',
                       width: width * 0.6,
                       height: height * 0.26,
                     ),
@@ -739,7 +944,8 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                       price: '\$1,750/mo',
                       location: 'Greenwich Village',
                       rating: null,
-                      imagePath: 'assets/images/Logo.png',
+                      imagePath:
+                          'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg',
                       width: width * 0.6,
                       height: height * 0.26,
                     ),
@@ -748,6 +954,227 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPropertyCardFromProperty({
+    required Property property,
+    required double width,
+    required double height,
+  }) {
+    print(
+        'Building property card for: ${property.title} in ${property.city}, image: ${property.imageUrl}');
+
+    return GestureDetector(
+      onTap: () {
+        print('Navigating to property detail: ${property.id}');
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TenantPropertyDetail(
+              propertyId: property.id,
+              price: property.price,
+              location: property.location,
+              imagePath: property.imageUrl,
+              propertyData: property.toMap(),
+            ),
+          ),
+        );
+      },
+      child: Container(
+        width: width,
+        height: height,
+        margin: EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 5,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Property Image
+            Stack(
+              children: [
+                Container(
+                  height: height * 0.65,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(12)),
+                  ),
+                  child: ClipRRect(
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(12)),
+                    child: property.images.isNotEmpty
+                        ? Image.network(
+                            property.images.first,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                color: Colors.grey[200],
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    value: loadingProgress.expectedTotalBytes !=
+                                            null
+                                        ? loadingProgress
+                                                .cumulativeBytesLoaded /
+                                            (loadingProgress
+                                                    .expectedTotalBytes ??
+                                                1)
+                                        : null,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        AppConfig.primaryColor),
+                                  ),
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              print(
+                                  'Error loading image: $error for URL ${property.images.first}');
+                              return Container(
+                                color: Colors.grey[300],
+                                child: Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.broken_image,
+                                          color: Colors.grey[500]),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        'Image unavailable',
+                                        style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          )
+                        : Container(
+                            color: Colors.grey[300],
+                            child: Center(
+                              child: Icon(Icons.home,
+                                  color: Colors.grey[500], size: 40),
+                            ),
+                          ),
+                  ),
+                ),
+                // Property type badge
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppConfig.primaryColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      property.propertyType,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                ),
+                // Property title banner
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.7)
+                        ],
+                      ),
+                    ),
+                    child: Text(
+                      property.title,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            // Property Info
+            Padding(
+              padding: EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          property.price,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        property.roomType,
+                        style: TextStyle(
+                          color: Colors.grey[800],
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on,
+                          size: 14, color: Colors.grey[600]),
+                      SizedBox(width: 2),
+                      Expanded(
+                        child: Text(
+                          property.location,
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 13,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -798,7 +1225,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
                 image: DecorationImage(
-                  image: AssetImage(imagePath),
+                  image: NetworkImage(imagePath),
                   fit: BoxFit.cover,
                 ),
               ),

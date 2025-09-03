@@ -1,9 +1,146 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:uuid/uuid.dart';
+import 'package:http/http.dart' as http;
+
+// Property model class
+class Property {
+  final String id;
+  final String ownerId;
+  final String title;
+  final String description;
+  final String price;
+  final String location;
+  final String city;
+  final List<String> images;
+  final double? rating;
+  final bool available;
+  final String propertyType;
+  final String roomType;
+  final int? squareFootage;
+  final List<String> amenities;
+
+  Property({
+    required this.id,
+    required this.ownerId,
+    required this.title,
+    required this.description,
+    required this.price,
+    required this.location,
+    required this.city,
+    required this.images,
+    this.rating,
+    required this.available,
+    required this.propertyType,
+    required this.roomType,
+    this.squareFootage,
+    required this.amenities,
+  });
+
+  // Get primary image URL (first in list or default)
+  String get imageUrl => images.isNotEmpty
+      ? images.first
+      : 'https://via.placeholder.com/300x200?text=Property';
+
+  // Create Property object from Firestore document
+  factory Property.fromFirestore(DocumentSnapshot doc, String ownerId) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+    // Extract images list
+    List<String> imagesList = [];
+    if (data['images'] != null) {
+      try {
+        if (data['images'] is List) {
+          imagesList = List<String>.from(data['images']);
+        } else if (data['images'] is Map) {
+          // Handle case where images are stored as a map with numeric keys
+          Map<String, dynamic> imagesMap =
+              Map<String, dynamic>.from(data['images']);
+          imagesList =
+              imagesMap.values.map((value) => value.toString()).toList();
+        }
+      } catch (e) {
+        print('Error parsing images: $e');
+      }
+    }
+
+    // Extract amenities list
+    List<String> amenitiesList = [];
+    if (data['amenities'] != null) {
+      try {
+        if (data['amenities'] is List) {
+          amenitiesList = List<String>.from(data['amenities']);
+        } else if (data['amenities'] is Map) {
+          // Handle case where amenities are stored as a map with numeric keys
+          Map<String, dynamic> amenitiesMap =
+              Map<String, dynamic>.from(data['amenities']);
+          amenitiesList =
+              amenitiesMap.values.map((value) => value.toString()).toList();
+        }
+      } catch (e) {
+        print('Error parsing amenities: $e');
+      }
+    }
+
+    // Format price with currency symbol if it's a number
+    String formattedPrice = '';
+    if (data['price'] != null) {
+      if (data['price'] is num) {
+        formattedPrice = '₹${data['price']}';
+      } else {
+        formattedPrice = data['price'].toString();
+      }
+    } else {
+      formattedPrice = 'Price not specified';
+    }
+
+    return Property(
+      id: doc.id,
+      ownerId: ownerId,
+      title: data['title'] ?? 'Property',
+      description: data['description'] ?? 'No description available',
+      price: formattedPrice,
+      location: data['address'] ?? 'Location not specified',
+      city: data['city'] ?? '',
+      images: imagesList,
+      rating:
+          data['rating'] != null ? (data['rating'] as num).toDouble() : null,
+      available: data['isAvailable'] ?? true,
+      propertyType: data['propertyType']?.toString() ?? 'Not specified',
+      roomType: data['roomType']?.toString() ?? 'Not specified',
+      squareFootage: data['squareFootage'] is num
+          ? (data['squareFootage'] as num).toInt()
+          : null,
+      amenities: amenitiesList,
+    );
+  }
+
+  // Convert to Map for passing to property detail page
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'ownerId': ownerId,
+      'title': title,
+      'description': description,
+      'price': price,
+      'location': location,
+      'city': city,
+      'images': images,
+      'imageUrl': imageUrl, // Include primary image for backward compatibility
+      'rating': rating,
+      'available': available,
+      'propertyType': propertyType,
+      'roomType': roomType,
+      'squareFootage': squareFootage,
+      'amenities': amenities,
+    };
+  }
+}
 
 class Api {
   // Fetch all properties (available and unavailable) for the current owner
@@ -777,14 +914,44 @@ class Api {
         'ownerEmail': user.email,
       };
 
-      // Save to Firestore using the specified structure
-      // "Properties/[User MailID]/Available/[propertyid]/{formdata}"
-      await _firestore
-          .collection('Properties')
-          .doc(user.email)
-          .collection('Available')
-          .doc(propertyId)
-          .set(finalPropertyData);
+      // Create a transaction to update both the property and owner's property count
+      await _firestore.runTransaction((transaction) async {
+        // Get owner document reference
+        final ownerDocRef = _firestore.collection('Properties').doc(user.email);
+
+        // Get the current owner document
+        DocumentSnapshot ownerSnapshot = await transaction.get(ownerDocRef);
+
+        // Create or update the property counter fields
+        if (ownerSnapshot.exists) {
+          // Owner document exists, get current counts
+          Map<String, dynamic> ownerData =
+              ownerSnapshot.data() as Map<String, dynamic>;
+          int availableCount = (ownerData['availableProperties'] ?? 0) + 1;
+          int totalCount = (ownerData['totalProperties'] ?? 0) + 1;
+
+          // Update owner document with new counts
+          transaction.update(ownerDocRef, {
+            'availableProperties': availableCount,
+            'totalProperties': totalCount,
+            'lastUpdated': FieldValue.serverTimestamp(),
+          });
+        } else {
+          // Owner document doesn't exist, create it with initial counts
+          transaction.set(ownerDocRef, {
+            'availableProperties': 1,
+            'totalProperties': 1,
+            'unavailableProperties': 0,
+            'ownerEmail': user.email,
+            'ownerId': user.uid,
+            'lastUpdated': FieldValue.serverTimestamp(),
+          });
+        }
+
+        // Save the property in the Available subcollection
+        final propertyRef = ownerDocRef.collection('Available').doc(propertyId);
+        transaction.set(propertyRef, finalPropertyData);
+      });
 
       print('Property added successfully with ID: $propertyId');
       return propertyId;
@@ -888,37 +1055,66 @@ class Api {
         throw Exception('You must be logged in to delete a property');
       }
 
-      // Check if property exists in Available collection
-      final availableDocRef = _firestore
-          .collection('Properties')
-          .doc(user.email)
-          .collection('Available')
-          .doc(propertyId);
+      // Create a transaction to handle the deletion and counter updates
+      await _firestore.runTransaction((transaction) async {
+        // Get owner document reference
+        final ownerDocRef = _firestore.collection('Properties').doc(user.email);
+        final ownerSnapshot = await transaction.get(ownerDocRef);
 
-      final availableDocSnap = await availableDocRef.get();
+        if (!ownerSnapshot.exists) {
+          throw Exception('Owner document not found');
+        }
 
-      // Check if property exists in Unavailable collection
-      final unavailableDocRef = _firestore
-          .collection('Properties')
-          .doc(user.email)
-          .collection('Unavailable')
-          .doc(propertyId);
+        // Check if property exists in Available collection
+        final availableDocRef =
+            ownerDocRef.collection('Available').doc(propertyId);
+        final availableDocSnap = await transaction.get(availableDocRef);
 
-      final unavailableDocSnap = await unavailableDocRef.get();
+        // Check if property exists in Unavailable collection
+        final unavailableDocRef =
+            ownerDocRef.collection('Unavailable').doc(propertyId);
+        final unavailableDocSnap = await transaction.get(unavailableDocRef);
 
-      // Delete from the appropriate collection
-      if (availableDocSnap.exists) {
-        await availableDocRef.delete();
-        print(
-            'Property deleted from Available collection with ID: $propertyId');
-      } else if (unavailableDocSnap.exists) {
-        await unavailableDocRef.delete();
-        print(
-            'Property deleted from Unavailable collection with ID: $propertyId');
-      } else {
-        print('Property not found in either collection: $propertyId');
-        throw Exception('Property not found in either collection');
-      }
+        // Update counters based on where the property was found
+        Map<String, dynamic> ownerData =
+            ownerSnapshot.data() as Map<String, dynamic>;
+
+        if (availableDocSnap.exists) {
+          // Decrement available properties count
+          int availableCount = (ownerData['availableProperties'] ?? 1) - 1;
+          int totalCount = (ownerData['totalProperties'] ?? 1) - 1;
+
+          transaction.update(ownerDocRef, {
+            'availableProperties': availableCount >= 0 ? availableCount : 0,
+            'totalProperties': totalCount >= 0 ? totalCount : 0,
+            'lastUpdated': FieldValue.serverTimestamp(),
+          });
+
+          // Delete the property
+          transaction.delete(availableDocRef);
+          print(
+              'Property deleted from Available collection with ID: $propertyId');
+        } else if (unavailableDocSnap.exists) {
+          // Decrement unavailable properties count
+          int unavailableCount = (ownerData['unavailableProperties'] ?? 1) - 1;
+          int totalCount = (ownerData['totalProperties'] ?? 1) - 1;
+
+          transaction.update(ownerDocRef, {
+            'unavailableProperties':
+                unavailableCount >= 0 ? unavailableCount : 0,
+            'totalProperties': totalCount >= 0 ? totalCount : 0,
+            'lastUpdated': FieldValue.serverTimestamp(),
+          });
+
+          // Delete the property
+          transaction.delete(unavailableDocRef);
+          print(
+              'Property deleted from Unavailable collection with ID: $propertyId');
+        } else {
+          print('Property not found in either collection: $propertyId');
+          throw Exception('Property not found in either collection');
+        }
+      });
     } catch (e) {
       print('Error deleting property: $e');
       throw Exception('Failed to delete property: $e');
@@ -937,12 +1133,11 @@ class Api {
         throw Exception('You must be logged in to update property status');
       }
 
+      // Get owner document reference
+      final ownerDocRef = _firestore.collection('Properties').doc(user.email);
+
       // Get the property document
-      final propertyRef = _firestore
-          .collection('Properties')
-          .doc(user.email)
-          .collection('Available')
-          .doc(propertyId);
+      final propertyRef = ownerDocRef.collection('Available').doc(propertyId);
 
       final propertySnap = await propertyRef.get();
       if (!propertySnap.exists) {
@@ -953,6 +1148,7 @@ class Api {
       Map<String, dynamic> propertyData =
           propertySnap.data() as Map<String, dynamic>;
 
+      // Process images and videos if needed
       // Check if we should keep existing images
       bool keepExistingImages =
           updatedData != null && updatedData['keepExistingImages'] == true;
@@ -1023,20 +1219,50 @@ class Api {
         propertyData = {...propertyData, ...updatedData};
       }
 
-      // Move property to Unavailable collection with updated data
-      await _firestore
-          .collection('Properties')
-          .doc(user.email)
-          .collection('Unavailable')
-          .doc(propertyId)
-          .set({
+      // Create final property data with unavailable status
+      final Map<String, dynamic> finalPropertyData = {
         ...propertyData,
         'isAvailable': false,
         'statusChangedAt': FieldValue.serverTimestamp(),
-      });
+      };
 
-      // Delete from Available collection
-      await propertyRef.delete();
+      // Update property status and counters in a transaction
+      await _firestore.runTransaction((transaction) async {
+        // Get the current owner document
+        DocumentSnapshot ownerSnapshot = await transaction.get(ownerDocRef);
+
+        if (ownerSnapshot.exists) {
+          // Owner document exists, get current counts
+          Map<String, dynamic> ownerData =
+              ownerSnapshot.data() as Map<String, dynamic>;
+          int availableCount = (ownerData['availableProperties'] ?? 1) - 1;
+          int unavailableCount = (ownerData['unavailableProperties'] ?? 0) + 1;
+
+          // Update owner document with new counts
+          transaction.update(ownerDocRef, {
+            'availableProperties': availableCount >= 0 ? availableCount : 0,
+            'unavailableProperties': unavailableCount,
+            'lastUpdated': FieldValue.serverTimestamp(),
+          });
+        } else {
+          // Owner document doesn't exist, create it with initial counts
+          transaction.set(ownerDocRef, {
+            'availableProperties': 0,
+            'unavailableProperties': 1,
+            'totalProperties': 1,
+            'ownerEmail': user.email,
+            'ownerId': user.uid,
+            'lastUpdated': FieldValue.serverTimestamp(),
+          });
+        }
+
+        // Add to Unavailable collection
+        transaction.set(ownerDocRef.collection('Unavailable').doc(propertyId),
+            finalPropertyData);
+
+        // Delete from Available collection
+        transaction.delete(propertyRef);
+      });
 
       print('Property marked as unavailable with ID: $propertyId');
     } catch (e) {
@@ -1057,12 +1283,11 @@ class Api {
         throw Exception('You must be logged in to update property status');
       }
 
+      // Get owner document reference
+      final ownerDocRef = _firestore.collection('Properties').doc(user.email);
+
       // Get the property document from Unavailable collection
-      final propertyRef = _firestore
-          .collection('Properties')
-          .doc(user.email)
-          .collection('Unavailable')
-          .doc(propertyId);
+      final propertyRef = ownerDocRef.collection('Unavailable').doc(propertyId);
 
       final propertySnap = await propertyRef.get();
       if (!propertySnap.exists) {
@@ -1073,6 +1298,7 @@ class Api {
       Map<String, dynamic> propertyData =
           propertySnap.data() as Map<String, dynamic>;
 
+      // Process images and videos if needed
       // Check if we should keep existing images
       bool keepExistingImages =
           updatedData != null && updatedData['keepExistingImages'] == true;
@@ -1143,25 +1369,91 @@ class Api {
         propertyData = {...propertyData, ...updatedData};
       }
 
-      // Move property to Available collection with updated data
-      await _firestore
-          .collection('Properties')
-          .doc(user.email)
-          .collection('Available')
-          .doc(propertyId)
-          .set({
+      // Create final property data with available status
+      final Map<String, dynamic> finalPropertyData = {
         ...propertyData,
         'isAvailable': true,
         'statusChangedAt': FieldValue.serverTimestamp(),
-      });
+      };
 
-      // Delete from Unavailable collection
-      await propertyRef.delete();
+      // Update property status and counters in a transaction
+      await _firestore.runTransaction((transaction) async {
+        // Get the current owner document
+        DocumentSnapshot ownerSnapshot = await transaction.get(ownerDocRef);
+
+        if (ownerSnapshot.exists) {
+          // Owner document exists, get current counts
+          Map<String, dynamic> ownerData =
+              ownerSnapshot.data() as Map<String, dynamic>;
+          int availableCount = (ownerData['availableProperties'] ?? 0) + 1;
+          int unavailableCount = (ownerData['unavailableProperties'] ?? 1) - 1;
+
+          // Update owner document with new counts
+          transaction.update(ownerDocRef, {
+            'availableProperties': availableCount,
+            'unavailableProperties':
+                unavailableCount >= 0 ? unavailableCount : 0,
+            'lastUpdated': FieldValue.serverTimestamp(),
+          });
+        } else {
+          // Owner document doesn't exist, create it with initial counts
+          transaction.set(ownerDocRef, {
+            'availableProperties': 1,
+            'unavailableProperties': 0,
+            'totalProperties': 1,
+            'ownerEmail': user.email,
+            'ownerId': user.uid,
+            'lastUpdated': FieldValue.serverTimestamp(),
+          });
+        }
+
+        // Add to Available collection
+        transaction.set(ownerDocRef.collection('Available').doc(propertyId),
+            finalPropertyData);
+
+        // Delete from Unavailable collection
+        transaction.delete(propertyRef);
+      });
 
       print('Property marked as available with ID: $propertyId');
     } catch (e) {
       print('Error updating property status: $e');
       throw Exception('Failed to update property status: $e');
+    }
+  }
+
+  // Get property count summary for an owner
+  static Future<Map<String, dynamic>> getOwnerPropertyCounts(
+      String email) async {
+    try {
+      if (email.isEmpty) {
+        throw Exception('Email is required to get property counts');
+      }
+
+      // Get the owner document
+      final ownerDoc =
+          await _firestore.collection('Properties').doc(email).get();
+
+      if (!ownerDoc.exists) {
+        // If owner document doesn't exist, return zeros
+        return {
+          'availableProperties': 0,
+          'unavailableProperties': 0,
+          'totalProperties': 0,
+        };
+      }
+
+      // Return the property counts
+      Map<String, dynamic> ownerData = ownerDoc.data() as Map<String, dynamic>;
+      return {
+        'availableProperties': ownerData['availableProperties'] ?? 0,
+        'unavailableProperties': ownerData['unavailableProperties'] ?? 0,
+        'totalProperties': ownerData['totalProperties'] ?? 0,
+        'lastUpdated': ownerData['lastUpdated'],
+      };
+    } catch (e) {
+      print('Error fetching owner property counts: $e');
+      throw Exception('Failed to fetch property counts: $e');
     }
   }
 
@@ -1214,6 +1506,203 @@ class Api {
     } catch (e) {
       print('Error fetching owner unavailable properties: $e');
       throw Exception('Failed to fetch unavailable properties: $e');
+    }
+  }
+
+  // Synchronize property counts for an owner (useful for fixing count discrepancies)
+  static Future<void> synchronizeOwnerPropertyCounts(String email) async {
+    try {
+      if (email.isEmpty) {
+        throw Exception('Email is required to synchronize property counts');
+      }
+
+      // Get counts of actual properties in collections
+      final availableSnapshot = await _firestore
+          .collection('Properties')
+          .doc(email)
+          .collection('Available')
+          .get();
+
+      final unavailableSnapshot = await _firestore
+          .collection('Properties')
+          .doc(email)
+          .collection('Unavailable')
+          .get();
+
+      // Calculate actual counts
+      int availableCount = availableSnapshot.docs.length;
+      int unavailableCount = unavailableSnapshot.docs.length;
+      int totalCount = availableCount + unavailableCount;
+
+      // Update the owner document with correct counts
+      await _firestore.collection('Properties').doc(email).set({
+        'availableProperties': availableCount,
+        'unavailableProperties': unavailableCount,
+        'totalProperties': totalCount,
+        'lastUpdated': FieldValue.serverTimestamp(),
+        'ownerEmail': email,
+      }, SetOptions(merge: true));
+
+      print('Property counts synchronized successfully for owner: $email');
+      print(
+          'Available: $availableCount, Unavailable: $unavailableCount, Total: $totalCount');
+    } catch (e) {
+      print('Error synchronizing property counts: $e');
+      throw Exception('Failed to synchronize property counts: $e');
+    }
+  }
+
+  // Get properties near a specific city
+  static Future<List<Property>> getPropertiesByCity(String city) async {
+    if (city == 'Loading...' ||
+        city == 'Select City' ||
+        city == 'Unknown City') {
+      return [];
+    }
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+      List<Property> properties = [];
+
+      // Get all owners (all documents in Properties collection)
+      QuerySnapshot ownersSnapshot =
+          await firestore.collection('Properties').get();
+
+      for (var ownerDoc in ownersSnapshot.docs) {
+        String ownerEmail = ownerDoc.id;
+
+        try {
+          // Get available properties for this owner
+          QuerySnapshot propertiesSnapshot = await firestore
+              .collection('Properties')
+              .doc(ownerEmail)
+              .collection('Available')
+              .get();
+
+          // Process properties
+          for (var propertyDoc in propertiesSnapshot.docs) {
+            try {
+              Map<String, dynamic> data =
+                  propertyDoc.data() as Map<String, dynamic>;
+
+              // Check if isAvailable is true (or not specified)
+              bool isAvailable = data['isAvailable'] ?? true;
+              if (!isAvailable) continue;
+
+              // Only include properties in the current city (case insensitive comparison)
+              String propertyCity =
+                  data['city']?.toString().trim().toLowerCase() ?? '';
+              String currentCity = city.trim().toLowerCase();
+
+              if (propertyCity.isNotEmpty && propertyCity == currentCity) {
+                // Create property object with owner ID
+                Property property =
+                    Property.fromFirestore(propertyDoc, ownerEmail);
+                properties.add(property);
+              }
+            } catch (docError) {
+              print('Error processing property document: $docError');
+              continue;
+            }
+          }
+        } catch (collectionError) {
+          print(
+              'Error accessing Available collection for $ownerEmail: $collectionError');
+          continue;
+        }
+      }
+
+      return properties;
+    } catch (e) {
+      print('Error fetching properties by city: $e');
+      throw Exception('Failed to load properties: $e');
+    }
+  }
+
+  // Get city and state data for India from API
+  static Future<List<Map<String, String>>> getIndianStates() async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://api.countrystatecity.in/v1/countries/IN/states'),
+        headers: {
+          'X-CSCAPI-KEY':
+              'YTBrQWhHWEVWUk9SSEVSYllzbVNVTUJWRm1oaFBpN2FWeTRKbFpqbQ=='
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        List<Map<String, String>> states = [];
+
+        for (var state in data) {
+          states.add({
+            'name': state['name'].toString(),
+            'code': state['iso2'].toString(),
+          });
+        }
+
+        // Sort states alphabetically
+        states.sort((a, b) => a['name']!.compareTo(b['name']!));
+
+        return states;
+      } else {
+        throw Exception('Failed to load states');
+      }
+    } catch (e) {
+      print('Error fetching states: $e');
+      throw Exception('Failed to load states: $e');
+    }
+  }
+
+  // Get cities for a specific state in India
+  static Future<List<String>> getCitiesForState(String stateCode) async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+            'https://api.countrystatecity.in/v1/countries/IN/states/$stateCode/cities'),
+        headers: {
+          'X-CSCAPI-KEY':
+              'YTBrQWhHWEVWUk9SSEVSYllzbVNVTUJWRm1oaFBpN2FWeTRKbFpqbQ=='
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        List<String> cities =
+            data.map((city) => city['name'].toString()).toList();
+
+        // Sort cities alphabetically
+        cities.sort();
+
+        return cities;
+      } else {
+        throw Exception('Failed to load cities');
+      }
+    } catch (e) {
+      print('Error fetching cities: $e');
+      throw Exception('Failed to load cities: $e');
+    }
+  }
+
+  // Get city and state from location coordinates
+  static Future<Map<String, String?>> getCityFromLocation(
+      double latitude, double longitude) async {
+    try {
+      List<Placemark> placemarks =
+          await placemarkFromCoordinates(latitude, longitude);
+
+      if (placemarks.isNotEmpty) {
+        final Placemark place = placemarks.first;
+        String? detectedState = place.administrativeArea;
+        String? detectedCity = place.locality ?? place.subAdministrativeArea;
+
+        return {'city': detectedCity, 'state': detectedState};
+      }
+
+      return {'city': 'Unknown City', 'state': null};
+    } catch (e) {
+      print('Error getting location address: $e');
+      return {'city': 'Unknown City', 'state': null};
     }
   }
 
