@@ -96,8 +96,9 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: _screens[_selectedIndex](context),
-      ),
+          child: Container(
+              decoration: BoxDecoration(color: Colors.white),
+              child: _screens[_selectedIndex](context))),
       bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }

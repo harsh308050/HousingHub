@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/Helper/Models.dart';
+import 'package:housinghub/Helper/LoadingStateManager.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
@@ -460,163 +461,169 @@ class _LoginScreenState extends State<LoginScreen> {
   // Login method for tenant login
   Future<void> loginTenant() async {
     if (_formKey.currentState!.validate()) {
-      try {
-        setState(() {
-          isLoading = true;
-        });
+      // Import the LoadingStateManager at the top of the file
+      // import 'package:housinghub/Helper/LoadingStateManager.dart';
 
-        // Trim the inputs to avoid whitespace issues
-        final email = _emailController.text.trim();
-        final password =
-            _passwordController.text.trim(); // Sign in with email and password
-        User? user = await Api.signInWithEmailAndPassword(
-          email,
-          password,
-        );
+      // Trim the inputs to avoid whitespace issues
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
 
-        if (user != null) {
-          // Reload user to get the latest status
-          await Api.reloadUser();
-
-          // Check if email is verified
-          if (!Api.isEmailVerified()) {
-            // Email not verified
-            Models.showWarningSnackBar(
-                context, 'Please verify your email before logging in.');
-
-            // Offer to resend verification email
-            bool shouldResend = await _showResendVerificationDialog();
-            if (shouldResend) {
-              await Api.sendEmailVerification();
-              Models.showSuccessSnackBar(
-                  context, 'Verification email sent again.');
-            }
-
-            // Sign out the user
-            await Api.signOut();
-
+      await LoadingStateManager.runWithLoader(
+        context: context,
+        loadingState: (isLoading) {
+          // Only update state if the widget is still mounted
+          if (mounted) {
             setState(() {
-              isLoading = false;
+              this.isLoading = isLoading;
             });
-
-            return;
           }
+        },
+        operation: () async {
+          // Sign in with email and password
+          User? user = await Api.signInWithEmailAndPassword(
+            email,
+            password,
+          );
 
-          // Get user details from Firestore - check in tenants collection first
-          Map<String, dynamic>? userData =
-              await Api.getUserDetailsByEmail(email);
+          if (user != null) {
+            // Reload user to get the latest status
+            await Api.reloadUser();
 
-          if (userData != null) {
-            log("User data retrieved successfully: ${userData['firstName']} ${userData['lastName']}");
-            // Login successful, navigate to home page or dashboard
-            // Clear input fields after successful login
-            _clearInputFields();
-            // Add navigation to home page
-            _navigateToHomeScreen();
-          } else {
-            // Not found in tenants collection, check in owners collection
-            userData = await Api.getOwnerDetailsByEmail(email);
-            if (userData != null) {
-              log("Owner data found for tenant login: ${userData['fullName']}");
-              // Owner can login as tenant, navigate to home page
-              _clearInputFields();
-              _navigateToHomeScreen();
-            } else {
-              // Not found in either collection
-              Models.showErrorSnackBar(context,
-                  'No account found with this email. Please register first.');
-              setState(() {
-                isLoading = false;
-              });
-              return;
+            // Check if email is verified
+            if (!Api.isEmailVerified()) {
+              // Email not verified
+              Models.showWarningSnackBar(
+                  context, 'Please verify your email before logging in.');
+
+              // Offer to resend verification email
+              bool shouldResend = await _showResendVerificationDialog();
+              if (shouldResend && mounted) {
+                await Api.sendEmailVerification();
+                Models.showSuccessSnackBar(
+                    context, 'Verification email sent again.');
+              }
+
+              // Sign out the user
+              await Api.signOut();
+              return null; // Return null to indicate login did not proceed
             }
-          }
-        } else {
-          // Login failed
-          Models.showErrorSnackBar(context, 'Invalid email or password');
-        }
 
-        setState(() {
-          isLoading = false;
-        });
-      } catch (e) {
-        setState(() {
-          isLoading = false;
-        });
-        log("Login error: ${e.toString()}");
-        Models.showErrorSnackBar(context, 'Error: ${e.toString()}');
-      }
+            // Get user details from Firestore - check in tenants collection first
+            Map<String, dynamic>? userData =
+                await Api.getUserDetailsByEmail(email);
+
+            if (userData != null) {
+              log("User data retrieved successfully: ${userData['firstName']} ${userData['lastName']}");
+              return userData; // Return the user data for success handler
+            } else {
+              // Not found in tenants collection, check in owners collection
+              userData = await Api.getOwnerDetailsByEmail(email);
+              if (userData != null) {
+                log("Owner data found for tenant login: ${userData['fullName']}");
+                return userData; // Return the user data for success handler
+              } else {
+                // Not found in either collection
+                throw Exception(
+                    'No account found with this email. Please register first.');
+              }
+            }
+          } else {
+            // Login failed
+            throw Exception('Invalid email or password');
+          }
+        },
+        onSuccess: (userData) {
+          if (userData != null) {
+            // Login successful, navigate to home page or dashboard
+            _clearInputFields();
+            _navigateToHomeScreen();
+          }
+        },
+        onError: (e) {
+          log("Login error: ${e.toString()}");
+          String errorMessage = e is Exception
+              ? e.toString().replaceAll('Exception: ', '')
+              : 'Error: ${e.toString()}';
+          Models.showErrorSnackBar(context, errorMessage);
+        },
+      );
     }
   }
 
   // Login method for owner login
   Future<void> loginOwner() async {
     if (_formKey.currentState!.validate()) {
-      try {
-        setState(() {
-          isLoading = true;
-        });
+      // Trim the inputs to avoid whitespace issues
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
 
-        // Trim the inputs to avoid whitespace issues
-        final email = _emailController.text.trim();
-        final password = _passwordController.text.trim();
-
-        // Sign in with email and password
-        User? user = await Api.signInWithEmailAndPassword(
-          email,
-          password,
-        );
-
-        if (user != null) {
-          // Reload user to get the latest status
-          await Api.reloadUser();
-
-          // Check if email is verified
-          if (!Api.isEmailVerified()) {
+      await LoadingStateManager.runWithLoader(
+        context: context,
+        loadingState: (isLoading) {
+          // Only update state if the widget is still mounted
+          if (mounted) {
             setState(() {
-              isLoading = false;
+              this.isLoading = isLoading;
             });
+          }
+        },
+        operation: () async {
+          // Sign in with email and password
+          User? user = await Api.signInWithEmailAndPassword(
+            email,
+            password,
+          );
 
-            // Ask if user wants to resend verification email
+          if (user != null) {
+            // Reload user to get the latest status
+            await Api.reloadUser();
+
+            // Check if email is verified
+            if (!Api.isEmailVerified()) {
+              // Will handle verification in onSuccess callback
+              return false; // Return false to indicate verification needed
+            }
+
+            // Get user details from Firestore - check in owners collection
+            Map<String, dynamic>? userData =
+                await Api.getOwnerDetailsByEmail(email);
+
+            if (userData != null) {
+              log("Owner data retrieved successfully: ${userData['fullName']}");
+              return userData; // Return the user data for success handler
+            } else {
+              // Not found in owners collection
+              throw Exception(
+                  'No owner account found with this email. Please register as an owner first.');
+            }
+          } else {
+            // Login failed
+            throw Exception('Invalid email or password');
+          }
+        },
+        onSuccess: (result) async {
+          if (result == false) {
+            // Email not verified case
             bool resend = await _showResendVerificationDialog();
-            if (resend) {
+            if (resend && mounted) {
               await Api.sendEmailVerification();
               Models.showSuccessSnackBar(
                   context, 'Verification email sent. Please check your inbox.');
             }
-            return;
-          }
-
-          // Get user details from Firestore - check in owners collection
-          Map<String, dynamic>? userData =
-              await Api.getOwnerDetailsByEmail(email);
-
-          if (userData != null) {
-            log("Owner data retrieved successfully: ${userData['fullName']}");
-            // Owner login successful, navigate to home page
-            _navigateToHomeScreen();
           } else {
-            // Not found in owners collection
-            Models.showWarningSnackBar(context,
-                'No owner account found with this email. Please register as an owner first.');
-            setState(() {
-              isLoading = false;
-            });
+            // Login successful with user data
+            _clearInputFields();
+            _navigateToHomeScreen();
           }
-        } else {
-          // Login failed
-          Models.showErrorSnackBar(context, 'Invalid email or password');
-          setState(() {
-            isLoading = false;
-          });
-        }
-      } catch (e) {
-        setState(() {
-          isLoading = false;
-        });
-        log("Login error: ${e.toString()}");
-        Models.showErrorSnackBar(context, 'Error: ${e.toString()}');
-      }
+        },
+        onError: (e) {
+          log("Login error: ${e.toString()}");
+          String errorMessage = e is Exception
+              ? e.toString().replaceAll('Exception: ', '')
+              : 'Error: ${e.toString()}';
+          Models.showErrorSnackBar(context, errorMessage);
+        },
+      );
     }
   }
 

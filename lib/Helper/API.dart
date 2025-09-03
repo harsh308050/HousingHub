@@ -550,6 +550,37 @@ class Api {
     }
   }
 
+  // Update owner profile
+  static Future<void> updateOwnerProfile(
+      String email, Map<String, dynamic> updatedData) async {
+    try {
+      print("API: Updating owner profile for: $email");
+
+      // Check if email is provided
+      if (email.isEmpty) {
+        throw Exception('Email is required to update profile');
+      }
+
+      // Reference to the owner document
+      final docRef = _firestore.collection('Owners').doc(email);
+
+      // Check if document exists
+      final docSnap = await docRef.get();
+      if (!docSnap.exists) {
+        throw Exception('Owner profile not found');
+      }
+
+      // Update the document with new data
+      await docRef.update(updatedData);
+
+      print("API: Owner profile updated successfully");
+    } catch (e) {
+      print("API Error updating owner profile: $e");
+      print("API Error stack trace: ${StackTrace.current}");
+      rethrow;
+    }
+  }
+
   // Check if user is owner or tenant
   static Future<String> getUserType(String email) async {
     if (email.isEmpty) {

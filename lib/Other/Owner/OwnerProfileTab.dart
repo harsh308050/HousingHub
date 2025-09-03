@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:housinghub/config/AppConfig.dart';
+import 'package:housinghub/Other/Owner/EditOwnerProfile.dart';
 
 class OwnerProfileTab extends StatefulWidget {
   final User? user;
@@ -83,10 +84,6 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
             width: width,
             decoration: BoxDecoration(
               color: Colors.white,
-              border: Border(
-                bottom: BorderSide(
-                    color: Color.fromARGB(102, 158, 158, 158), width: 2.0),
-              ),
             ),
             child: Text(
               'Profile',
@@ -167,8 +164,23 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
                         spacing: height * 0.02,
                         children: [
                           ElevatedButton(
-                            onPressed: () {
-                              // Handle profile editing
+                            onPressed: () async {
+                              // Navigate to edit profile screen
+                              final result = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => EditOwnerProfile(
+                                    ownerData: _ownerData,
+                                  ),
+                                ),
+                              );
+
+                              // Refresh profile data if updated
+                              if (result == true &&
+                                  widget.user != null &&
+                                  widget.user!.email != null) {
+                                _fetchOwnerData();
+                              }
                             },
                             style: ElevatedButton.styleFrom(
                               fixedSize: Size(width, height * 0.07),
@@ -185,6 +197,36 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
                                   TextStyle(fontSize: 18, color: Colors.white),
                             ),
                           ),
+                          ElevatedButton(
+                            onPressed: () async {
+                              try {
+                                await Api.signOut();
+                                if (context.mounted) {
+                                  Navigator.pushNamedAndRemoveUntil(
+                                      context, 'LoginScreen', (route) => false);
+                                }
+                              } catch (e) {
+                                print("Error signing out: $e");
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              fixedSize: Size(width, height * 0.07),
+                              padding:
+                                  EdgeInsets.symmetric(vertical: height * 0.02),
+                              shape: RoundedRectangleBorder(
+                                side: BorderSide(
+                                  color: Color(0xFFFF3B30),
+                                  width: 2.0,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            child: Text(
+                              'Logout',
+                              style: TextStyle(
+                                  fontSize: 18, color: Color(0xFFFF3B30)),
+                            ),
+                          )
                         ],
                       ),
                       Expanded(
@@ -410,36 +452,6 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
                           ),
                         ),
                       ),
-                      ElevatedButton(
-                        onPressed: () async {
-                          try {
-                            await Api.signOut();
-                            if (context.mounted) {
-                              Navigator.pushNamedAndRemoveUntil(
-                                  context, 'LoginScreen', (route) => false);
-                            }
-                          } catch (e) {
-                            print("Error signing out: $e");
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          fixedSize: Size(width, height * 0.07),
-                          padding:
-                              EdgeInsets.symmetric(vertical: height * 0.02),
-                          shape: RoundedRectangleBorder(
-                            side: BorderSide(
-                              color: Color(0xFFFF3B30),
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: Text(
-                          'Logout',
-                          style:
-                              TextStyle(fontSize: 18, color: Color(0xFFFF3B30)),
-                        ),
-                      )
                     ],
                   ),
                 )),

@@ -142,11 +142,13 @@ class _AddPropertyState extends State<AddProperty> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        centerTitle: true,
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
+          textAlign: TextAlign.center,
           'Add Property',
           style: TextStyle(
             color: Colors.black87,
