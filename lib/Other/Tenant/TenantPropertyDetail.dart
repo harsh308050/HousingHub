@@ -201,6 +201,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
 
     return Scaffold(
       appBar: AppBar(
+        centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(

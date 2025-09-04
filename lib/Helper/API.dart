@@ -147,13 +147,18 @@ class Property {
       squareFootage: data['squareFootage'] is num
           ? (data['squareFootage'] as num).toInt()
           : null,
-      bedrooms: data['bedrooms'] is num ? (data['bedrooms'] as num).toInt() : null,
-      bathrooms: data['bathrooms'] is num ? (data['bathrooms'] as num).toInt() : null,
+      bedrooms:
+          data['bedrooms'] is num ? (data['bedrooms'] as num).toInt() : null,
+      bathrooms:
+          data['bathrooms'] is num ? (data['bathrooms'] as num).toInt() : null,
       femaleAllowed: data['femaleAllowed'] as bool?,
       maleAllowed: data['maleAllowed'] as bool?,
       amenities: amenitiesList,
-      latitude: data['latitude'] is num ? (data['latitude'] as num).toDouble() : null,
-      longitude: data['longitude'] is num ? (data['longitude'] as num).toDouble() : null,
+      latitude:
+          data['latitude'] is num ? (data['latitude'] as num).toDouble() : null,
+      longitude: data['longitude'] is num
+          ? (data['longitude'] as num).toDouble()
+          : null,
       createdAt: createdAt,
     );
   }
