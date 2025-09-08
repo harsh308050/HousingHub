@@ -88,8 +88,9 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
           genderOk = false;
         if (_selectedFilters.contains('gender:Female Only') && !femaleAllowed)
           genderOk = false;
-        if (_selectedFilters.contains('gender:Both') && !maleAllowed && !femaleAllowed)
-          genderOk = false;
+        if (_selectedFilters.contains('gender:Both') &&
+            !maleAllowed &&
+            !femaleAllowed) genderOk = false;
       }
       if (!genderOk) return false;
 
@@ -162,8 +163,7 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
                   min: 0,
                   max: _maxPriceFound,
                   divisions: 20,
-                  labels: RangeLabels(
-                      '₹${_priceRange.start.round()}',
+                  labels: RangeLabels('₹${_priceRange.start.round()}',
                       '₹${_priceRange.end.round()}'),
                   onChanged: (v) => setM(() => _priceRange = v),
                 ),
@@ -174,7 +174,8 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildFilterGroup('Gender', 'gender', setM),
-                        _buildFilterGroup('Property Type', 'propertyType', setM),
+                        _buildFilterGroup(
+                            'Property Type', 'propertyType', setM),
                         _buildFilterGroup('Amenities', 'amenities', setM),
                       ],
                     ),
@@ -203,7 +204,8 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppConfig.primaryColor,
                         ),
-                        child: const Text('Apply'),
+                        child: const Text('Apply',
+                            style: TextStyle(color: Colors.white)),
                       ),
                     ),
                   ],
@@ -266,6 +268,7 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
               child: _buildSearchBar(),
             ),
+            _buildCategoryFiltersRow(),
             _buildActiveFiltersRow(),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -337,12 +340,12 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           )
         ],
       ),
@@ -361,19 +364,69 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
               ),
             ),
           ),
-          InkWell(
+          GestureDetector(
             onTap: _showFiltersSheet,
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppConfig.primaryColor.withOpacity(.08),
-                borderRadius: BorderRadius.circular(10),
+                color: AppConfig.primaryColor,
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(Icons.filter_list,
-                  size: 20, color: AppConfig.primaryColor),
+              child: const Icon(Icons.tune, size: 18, color: Colors.white),
             ),
-          )
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryFiltersRow() {
+    final categories = [
+      {'label': 'Price', 'icon': Icons.payments_outlined},
+      {'label': 'Gender', 'icon': Icons.wc_outlined},
+      {'label': 'Type', 'icon': Icons.home_work_outlined},
+      {'label': 'Amenities', 'icon': Icons.category_outlined},
+    ];
+    return SizedBox(
+      height: 42,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        scrollDirection: Axis.horizontal,
+        itemBuilder: (c, i) {
+          final item = categories[i];
+          return GestureDetector(
+            onTap: _showFiltersSheet,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E6EB)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.03),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              child: Row(
+                children: [
+                  Icon(item['icon'] as IconData,
+                      size: 16, color: AppConfig.primaryColor),
+                  const SizedBox(width: 6),
+                  Text(
+                    item['label'] as String,
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemCount: categories.length,
       ),
     );
   }
@@ -420,7 +473,12 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
             const Text('Sort By',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            for (final opt in ['Relevance', 'Newest', 'Price: Low to High', 'Price: High to Low'])
+            for (final opt in [
+              'Relevance',
+              'Newest',
+              'Price: Low to High',
+              'Price: High to Low'
+            ])
               ListTile(
                 title: Text(opt),
                 trailing: _sort == opt
@@ -490,28 +548,38 @@ class _PropertyResultCard extends StatelessWidget {
     final priceStr = '₹${priceNum.toStringAsFixed(0)}';
     final rating = data['rating'];
     final isNew = data['createdAt'] is Timestamp
-        ? DateTime.now().difference((data['createdAt'] as Timestamp).toDate()).inDays < 14
+        ? DateTime.now()
+                .difference((data['createdAt'] as Timestamp).toDate())
+                .inDays <
+            14
         : false;
     final available = data['isAvailable'] == true;
-    final genderBadge = data['femaleAllowed'] == true && data['maleAllowed'] == true
-        ? 'Both'
-        : data['femaleAllowed'] == true
-            ? 'Female'
-            : data['maleAllowed'] == true
-                ? 'Male'
-                : '';
+    final genderBadge =
+        data['femaleAllowed'] == true && data['maleAllowed'] == true
+            ? 'Open to All'
+            : data['femaleAllowed'] == true
+                ? 'Female'
+                : data['maleAllowed'] == true
+                    ? 'Male'
+                    : '';
+    final bedrooms = data['bedrooms'];
+    final typeLabel = bedrooms != null
+        ? '${bedrooms.toString()} BHK'
+        : (data['propertyType']?.toString() ?? '');
+    final distance = data['distanceFromMetro']?.toString();
     return InkWell(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E6EB)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(.06),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+              color: Colors.black.withOpacity(.03),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             )
           ],
         ),
@@ -521,9 +589,10 @@ class _PropertyResultCard extends StatelessWidget {
             Stack(
               children: [
                 ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(16)),
                   child: AspectRatio(
-                    aspectRatio: 16/9,
+                    aspectRatio: 16 / 9,
                     child: Image.network(
                       image,
                       fit: BoxFit.cover,
@@ -537,16 +606,15 @@ class _PropertyResultCard extends StatelessWidget {
                 Positioned(
                   top: 10,
                   left: 10,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    spacing: 10,
                     children: [
                       if (available)
                         _Badge(label: 'Verified', color: Colors.green.shade600),
                       if (isNew)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: _Badge(label: 'New', color: Colors.orange.shade600),
-                        ),
+                        _Badge(label: 'New', color: Colors.orange.shade600),
                     ],
                   ),
                 ),
@@ -584,7 +652,7 @@ class _PropertyResultCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              data['propertyType']?.toString().toUpperCase() ?? '',
+                              typeLabel,
                               style: TextStyle(
                                 fontSize: 11,
                                 letterSpacing: .5,
@@ -609,10 +677,16 @@ class _PropertyResultCard extends StatelessWidget {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.star, size: 16, color: Colors.amber),
+                            const Icon(Icons.star,
+                                size: 16, color: Colors.amber),
                             const SizedBox(width: 4),
                             Text(rating.toString(),
-                                style: const TextStyle(fontWeight: FontWeight.w600)),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600)),
+                            const SizedBox(width: 2),
+                            const Text('(128)',
+                                style: TextStyle(
+                                    fontSize: 11, color: Colors.black54)),
                           ],
                         ),
                     ],
@@ -620,12 +694,14 @@ class _PropertyResultCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.location_on, size: 14, color: Colors.grey),
+                      const Icon(Icons.location_on,
+                          size: 14, color: Colors.grey),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           data['address']?.toString() ?? 'Location',
-                          style: const TextStyle(fontSize: 12, color: Colors.black54),
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.black54),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -633,12 +709,25 @@ class _PropertyResultCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 14,
+                  Row(
                     children: [
-                      Row(children: const [Icon(Icons.wifi, size: 16), SizedBox(width:4), Text('Wi-Fi', style: TextStyle(fontSize: 12))]),
-                      Row(children: const [Icon(Icons.cleaning_services, size: 16), SizedBox(width:4), Text('House Keeping', style: TextStyle(fontSize: 12))]),
-                      Row(children: const [Icon(Icons.restaurant, size: 16), SizedBox(width:4), Text('Mess', style: TextStyle(fontSize: 12))]),
+                      Row(children: const [
+                        Icon(Icons.wifi, size: 14),
+                        SizedBox(width: 4),
+                        Text('Wi-Fi', style: TextStyle(fontSize: 11))
+                      ]),
+                      const SizedBox(width: 14),
+                      Row(children: const [
+                        Icon(Icons.cleaning_services, size: 14),
+                        SizedBox(width: 4),
+                        Text('House Keeping', style: TextStyle(fontSize: 11))
+                      ]),
+                      const SizedBox(width: 14),
+                      Row(children: const [
+                        Icon(Icons.restaurant, size: 14),
+                        SizedBox(width: 4),
+                        Text('Mess', style: TextStyle(fontSize: 11))
+                      ]),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -653,10 +742,19 @@ class _PropertyResultCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       const Text('/month',
-                          style: TextStyle(fontSize: 12, color: Colors.black54)),
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.black54)),
                       const Spacer(),
+                      if (distance != null && distance.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Text(distance,
+                              style: const TextStyle(
+                                  fontSize: 11, color: Colors.black54)),
+                        ),
                       if (genderBadge.isNotEmpty)
-                        _Badge(label: genderBadge, color: Colors.indigo.shade600),
+                        _Badge(
+                            label: genderBadge, color: Colors.indigo.shade600),
                       const SizedBox(width: 6),
                       _Badge(
                           label: data['roomType']?.toString() ?? 'Room',
@@ -682,7 +780,7 @@ class _Badge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(.1),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
