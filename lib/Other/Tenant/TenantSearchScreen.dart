@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/Other/Tenant/TenantPropertyDetail.dart';
@@ -526,10 +527,66 @@ class _RemovableChip extends StatelessWidget {
   }
 }
 
-class _PropertyResultCard extends StatelessWidget {
+class _PropertyResultCard extends StatefulWidget {
   final Map<String, dynamic> data;
   final VoidCallback onTap;
   const _PropertyResultCard({required this.data, required this.onTap});
+
+  @override
+  State<_PropertyResultCard> createState() => _PropertyResultCardState();
+}
+
+class _PropertyResultCardState extends State<_PropertyResultCard> {
+  bool _saved = false;
+  bool _checking = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final id = widget.data['id']?.toString();
+      if (user?.email != null && id != null) {
+        final val = await Api.isPropertySaved(
+            tenantEmail: user!.email!, propertyId: id);
+        if (mounted) setState(() => _saved = val);
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _checking = false);
+  }
+
+  Future<void> _toggle() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final id = widget.data['id']?.toString();
+    if (user?.email == null || id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sign in to save properties')));
+      return;
+    }
+    final prev = _saved;
+    setState(() => _saved = !prev);
+    try {
+      if (!prev) {
+        await Api.savePropertyForTenant(
+            tenantEmail: user!.email!,
+            propertyId: id,
+            propertyData: widget.data);
+      } else {
+        await Api.removeSavedProperty(
+            tenantEmail: user!.email!, propertyId: id);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saved = prev);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed: $e')));
+      }
+    }
+  }
 
   double _parsePrice(dynamic price) {
     if (price == null) return 0;
@@ -541,6 +598,7 @@ class _PropertyResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final data = widget.data;
     final image = (data['images'] is List && data['images'].isNotEmpty)
         ? data['images'][0]
         : 'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg';
@@ -568,7 +626,7 @@ class _PropertyResultCard extends StatelessWidget {
         : (data['propertyType']?.toString() ?? '');
     final distance = data['distanceFromMetro']?.toString();
     return InkWell(
-      onTap: onTap,
+      onTap: widget.onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
@@ -621,20 +679,27 @@ class _PropertyResultCard extends StatelessWidget {
                 Positioned(
                   top: 10,
                   right: 10,
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(.08),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        )
-                      ],
+                  child: GestureDetector(
+                    onTap: _checking ? null : _toggle,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(.08),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          )
+                        ],
+                      ),
+                      child: Icon(
+                        _saved ? Icons.bookmark : Icons.bookmark_border,
+                        size: 20,
+                        color: _saved ? AppConfig.primaryColor : Colors.black87,
+                      ),
                     ),
-                    child: const Icon(Icons.bookmark_border, size: 20),
                   ),
                 )
               ],

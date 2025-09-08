@@ -21,6 +21,7 @@ class Property {
   final String? state;
   final String? pincode;
   final List<String> images;
+  final String? video; // optional video URL
   final double? rating;
   final bool available;
   final String propertyType;
@@ -47,6 +48,7 @@ class Property {
     this.state,
     this.pincode,
     required this.images,
+    this.video,
     this.rating,
     required this.available,
     required this.propertyType,
@@ -139,6 +141,7 @@ class Property {
       state: data['state'] as String?,
       pincode: data['pincode'] as String?,
       images: imagesList,
+      video: (data['video'] ?? data['videoUrl'])?.toString(),
       rating:
           data['rating'] != null ? (data['rating'] as num).toDouble() : null,
       available: data['isAvailable'] ?? true,
@@ -179,6 +182,8 @@ class Property {
       'pincode': pincode,
       'images': images,
       'imageUrl': imageUrl, // Include primary image for backward compatibility
+      'video': video,
+      'videoUrl': video, // backward compatibility key
       'rating': rating,
       'available': available,
       'propertyType': propertyType,
@@ -1974,6 +1979,157 @@ class Api {
     } catch (e) {
       print('Error fetching property: $e');
       throw Exception('Failed to fetch property: $e');
+    }
+  }
+
+  // =============================
+  // SAVED PROPERTIES (Tenant)
+  // Firestore structure:
+  // SavedProperties / <tenantEmail> / Properties / <propertyId>
+  // =============================
+
+  static CollectionReference _savedRootCollection() =>
+      _firestore.collection('SavedProperties');
+
+  // Save a property for tenant (stores full property data + savedAt timestamp)
+  static Future<void> savePropertyForTenant(
+      {required String tenantEmail,
+      required String propertyId,
+      required Map<String, dynamic> propertyData}) async {
+    if (tenantEmail.isEmpty || propertyId.isEmpty) return;
+    try {
+      final tenantDoc = _savedRootCollection().doc(tenantEmail);
+      final propertyDoc = tenantDoc.collection('Properties').doc(propertyId);
+
+      await _firestore.runTransaction((tx) async {
+        final propSnap = await tx.get(propertyDoc);
+        final metaSnap = await tx.get(tenantDoc);
+
+        // Create meta doc if missing
+        if (!metaSnap.exists) {
+          tx.set(tenantDoc, {
+            'savedCount': 0,
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        // Only increment counter if the property is not already saved
+        if (!propSnap.exists) {
+          final dataToSave = Map<String, dynamic>.from(propertyData);
+          // Ensure id present
+          dataToSave['id'] = dataToSave['id'] ?? propertyId;
+          dataToSave['savedAt'] = FieldValue.serverTimestamp();
+          tx.set(propertyDoc, dataToSave, SetOptions(merge: true));
+          tx.update(tenantDoc, {
+            'savedCount': FieldValue.increment(1),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          // Merge any fresh data without touching counter
+          final dataToSave = Map<String, dynamic>.from(propertyData);
+          dataToSave['id'] = dataToSave['id'] ?? propertyId;
+          tx.set(propertyDoc, dataToSave, SetOptions(merge: true));
+        }
+      });
+    } catch (e) {
+      print('Error saving property for tenant: $e');
+      rethrow;
+    }
+  }
+
+  // Remove saved property
+  static Future<void> removeSavedProperty(
+      {required String tenantEmail, required String propertyId}) async {
+    if (tenantEmail.isEmpty || propertyId.isEmpty) return;
+    try {
+      final tenantDoc = _savedRootCollection().doc(tenantEmail);
+      final propertyDoc = tenantDoc.collection('Properties').doc(propertyId);
+
+      await _firestore.runTransaction((tx) async {
+        final propSnap = await tx.get(propertyDoc);
+        if (!propSnap.exists) return; // nothing to do
+
+        // Delete property doc
+        tx.delete(propertyDoc);
+
+        // Decrement counter if meta exists
+        final metaSnap = await tx.get(tenantDoc);
+        if (metaSnap.exists) {
+          final current =
+              (metaSnap.data() as Map<String, dynamic>)['savedCount'] ?? 0;
+          if (current is int && current > 0) {
+            tx.update(tenantDoc, {
+              'savedCount': FieldValue.increment(-1),
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          }
+        }
+      });
+    } catch (e) {
+      print('Error removing saved property: $e');
+      rethrow;
+    }
+  }
+
+  // Check if property is saved
+  static Future<bool> isPropertySaved(
+      {required String tenantEmail, required String propertyId}) async {
+    if (tenantEmail.isEmpty || propertyId.isEmpty) return false;
+    try {
+      final doc = await _savedRootCollection()
+          .doc(tenantEmail)
+          .collection('Properties')
+          .doc(propertyId)
+          .get();
+      return doc.exists;
+    } catch (e) {
+      print('Error checking saved property: $e');
+      return false;
+    }
+  }
+
+  // Stream of saved properties (ordered by savedAt desc)
+  static Stream<QuerySnapshot<Map<String, dynamic>>> streamSavedProperties(
+      String tenantEmail) {
+    if (tenantEmail.isEmpty) {
+      // Return empty stream
+      return const Stream<QuerySnapshot<Map<String, dynamic>>>.empty();
+    }
+    return _savedRootCollection()
+        .doc(tenantEmail)
+        .collection('Properties')
+        .orderBy('savedAt', descending: true)
+        .snapshots();
+  }
+
+  // Stream metadata (includes savedCount)
+  static Stream<DocumentSnapshot<Map<String, dynamic>>> streamSavedMeta(
+      String tenantEmail) {
+    if (tenantEmail.isEmpty) {
+      return const Stream<DocumentSnapshot<Map<String, dynamic>>>.empty();
+    }
+    return _savedRootCollection()
+        .doc(tenantEmail)
+        .withConverter<Map<String, dynamic>>(
+          fromFirestore: (snap, _) => snap.data() ?? <String, dynamic>{},
+          toFirestore: (value, _) => value,
+        )
+        .snapshots();
+  }
+
+  // Fetch saved property IDs (one-off)
+  static Future<Set<String>> getSavedPropertyIds(String tenantEmail) async {
+    if (tenantEmail.isEmpty) return {};
+    try {
+      final snap = await _savedRootCollection()
+          .doc(tenantEmail)
+          .collection('Properties')
+          .get();
+      return snap.docs.map((d) => d.id).toSet();
+    } catch (e) {
+      print('Error fetching saved property IDs: $e');
+      return {};
     }
   }
 }

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class TenantPropertyDetail extends StatefulWidget {
   final String? propertyId;
@@ -62,6 +63,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
 
     // Load property data
     _loadPropertyData();
+    _checkIfSaved();
 
     // Listen for tab changes
     _tabController.addListener(() {
@@ -69,6 +71,22 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
         setState(() {});
       }
     });
+  }
+
+  Future<void> _checkIfSaved() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final propertyId = widget.propertyData?['id'] ?? widget.propertyId;
+      if (user?.email != null && propertyId != null) {
+        final saved = await Api.isPropertySaved(
+            tenantEmail: user!.email!, propertyId: propertyId);
+        if (mounted) {
+          setState(() => _isSaved = saved);
+        }
+      }
+    } catch (e) {
+      // silent fail
+    }
   }
 
   void _loadPropertyData() {
@@ -236,19 +254,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
               _isSaved ? Icons.favorite : Icons.favorite_border,
               color: _isSaved ? Colors.red : Colors.black,
             ),
-            onPressed: () {
-              setState(() {
-                _isSaved = !_isSaved;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(_isSaved
-                      ? 'Property saved to favorites'
-                      : 'Property removed from favorites'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
+            onPressed: _toggleSave,
           ),
         ],
       ),
@@ -1046,35 +1052,92 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
     }
   }
 
-  // Share property via deep link style URL
+  // Share property with Google Maps link
   Future<void> _shareProperty() async {
     try {
-      final id = widget.propertyData?['id'] ?? widget.propertyId ?? '';
-      final ownerEmail = widget.propertyData?['ownerEmail'] ?? '';
-      if (id.isEmpty || ownerEmail.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Cannot share: missing property identifiers')),
-        );
-        return;
-      }
-
-      // Custom scheme (configure intent-filter on Android & Associated Domains / universal link on iOS later)
-      final deepLink = 'housinghub://property?owner=$ownerEmail&id=$id';
-      final webFallback =
-          'https://housinghub.app/property?owner=$ownerEmail&id=$id';
-
       final title = widget.propertyData?['title'] ?? 'Property';
       final price = widget.propertyData?['price'] ?? widget.price ?? '';
       final address = widget.propertyData?['address'] ?? widget.location ?? '';
-      final shareText =
-          '$title\nPrice: $price / month\n$address\nOpen in app: $deepLink\nIf link doesn\'t open, tap: $webFallback';
-
-      await Share.share(shareText,
-          subject: 'Check out this property on HousingHub');
+      final lat = widget.propertyData?['latitude'];
+      final lng = widget.propertyData?['longitude'];
+      String? mapsUrl;
+      if (lat != null && lng != null) {
+        double? latitude;
+        double? longitude;
+        try {
+          latitude =
+              lat is num ? lat.toDouble() : double.tryParse(lat.toString());
+          longitude =
+              lng is num ? lng.toDouble() : double.tryParse(lng.toString());
+        } catch (_) {}
+        if (latitude != null && longitude != null) {
+          mapsUrl =
+              'https://www.google.com/maps/search/?api=1&query=\$latitude,\$longitude';
+        }
+      }
+      final shareText = [
+        '$title • $price/month',
+        address,
+        if (mapsUrl != null) ...['', 'View on Google Maps:', mapsUrl],
+      ].join('\n');
+      await Share.share(
+        shareText,
+        subject: 'Check out this property on HousingHub',
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error sharing property: $e')),
       );
+    }
+  }
+
+  Future<void> _toggleSave() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final propertyId = widget.propertyData?['id'] ?? widget.propertyId;
+    if (user?.email == null || propertyId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Please sign in to save properties')));
+      return;
+    }
+
+    final tenantEmail = user!.email!;
+    final wasSaved = _isSaved;
+    setState(() => _isSaved = !wasSaved); // optimistic
+
+    try {
+      if (!wasSaved) {
+        // Save
+        final data = widget.propertyData ??
+            {
+              'id': propertyId,
+              'title': widget.propertyData?['title'] ?? 'Property',
+            };
+        await Api.savePropertyForTenant(
+            tenantEmail: tenantEmail,
+            propertyId: propertyId,
+            propertyData: data);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Property saved')),
+          );
+        }
+      } else {
+        // Remove
+        await Api.removeSavedProperty(
+            tenantEmail: tenantEmail, propertyId: propertyId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Removed from saved')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSaved = wasSaved); // revert
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating saved property: $e')),
+        );
+      }
     }
   }
 }
