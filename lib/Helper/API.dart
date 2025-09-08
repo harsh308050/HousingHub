@@ -250,6 +250,57 @@ class Api {
     }
   }
 
+  // Fetch all properties across all owners using collectionGroup queries
+  static Future<List<Map<String, dynamic>>> getAllProperties({
+    bool includeUnavailable = true,
+  }) async {
+    try {
+      final List<Map<String, dynamic>> properties = [];
+      final ownersSnap = await _firestore.collection('Properties').get();
+      for (final owner in ownersSnap.docs) {
+        // Available
+        final availSnap = await owner.reference.collection('Available').get();
+        for (final doc in availSnap.docs) {
+          final data = doc.data();
+          properties.add({
+            ...data,
+            'id': data['id'] ?? doc.id,
+            'ownerEmail': owner.id,
+            'isAvailable': true,
+          });
+        }
+        if (includeUnavailable) {
+          final unavailSnap =
+              await owner.reference.collection('Unavailable').get();
+          for (final doc in unavailSnap.docs) {
+            final data = doc.data();
+            properties.add({
+              ...data,
+              'id': data['id'] ?? doc.id,
+              'ownerEmail': owner.id,
+              'isAvailable': false,
+            });
+          }
+        }
+      }
+      // Client-side sort by createdAt desc
+      properties.sort((a, b) {
+        final aTime = a['createdAt'] is Timestamp
+            ? (a['createdAt'] as Timestamp).millisecondsSinceEpoch
+            : 0;
+        final bTime = b['createdAt'] is Timestamp
+            ? (b['createdAt'] as Timestamp).millisecondsSinceEpoch
+            : 0;
+        return bTime.compareTo(aTime);
+      });
+      print('Fetched properties total: ${properties.length}');
+      return properties;
+    } catch (e) {
+      print('Error fetching all properties (iteration): $e');
+      return [];
+    }
+  }
+
   static final FirebaseAuth _auth = FirebaseAuth.instance;
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final GoogleSignIn _googleSignIn = GoogleSignIn();

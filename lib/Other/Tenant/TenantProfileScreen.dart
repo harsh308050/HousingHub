@@ -99,17 +99,17 @@ class _TenantProfileTabState extends State<TenantProfileTab>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
       body: SafeArea(
         child: Column(
           children: [
             _buildHeader(),
-            const SizedBox(height: 12),
             _buildTabs(),
             Expanded(
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _BookingsTab(),
+                  _BookingsTab(onSignOut: _signOut),
                   _DocumentsTab(email: email),
                   _PreferencesTab(
                     formKey: _formKey,
@@ -132,81 +132,82 @@ class _TenantProfileTabState extends State<TenantProfileTab>
   }
 
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+    final width = MediaQuery.of(context).size.width;
+    final height = MediaQuery.of(context).size.height;
+
+    return Container(
+      width: width - 20,
+      height: height * 0.25,
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+      margin: EdgeInsets.only(top: 10),
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x11000000),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          )
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Stack(
-            children: [
-              CircleAvatar(
-                radius: 34,
-                backgroundColor: AppConfig.primaryColor.withOpacity(0.1),
-                backgroundImage:
-                    photoUrl != null ? NetworkImage(photoUrl!) : null,
-                child: photoUrl == null
-                    ? Text(
-                        (firstName.isNotEmpty ? firstName[0] : '?')
-                            .toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 24,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      )
-                    : null,
-              ),
-            ],
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${firstName.isNotEmpty ? firstName : ''} ${lastName.isNotEmpty ? lastName : ''}'
-                      .trim(),
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                if (email.isNotEmpty)
-                  Row(
-                    children: [
-                      const Icon(Icons.email_outlined,
-                          size: 16, color: Colors.grey),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          email,
-                          style: TextStyle(color: Colors.grey[700]),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                if (mobile.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.phone, size: 16, color: Colors.grey),
-                        const SizedBox(width: 6),
-                        Text(mobile, style: TextStyle(color: Colors.grey[700])),
-                      ],
+          CircleAvatar(
+            radius: 42,
+            backgroundColor: AppConfig.primaryColor.withOpacity(0.12),
+            backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
+            child: photoUrl == null
+                ? Text(
+                    (firstName.isNotEmpty ? firstName[0] : '?').toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87,
                     ),
+                  )
+                : null,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            '${firstName.isNotEmpty ? firstName : ''} ${lastName.isNotEmpty ? lastName : ''}'
+                .trim(),
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 6),
+          if (email.isNotEmpty)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.email_outlined, size: 16, color: Colors.grey),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    email,
+                    style: TextStyle(color: Colors.grey[700]),
+                    overflow: TextOverflow.ellipsis,
                   ),
+                ),
               ],
             ),
-          ),
-          TextButton.icon(
-            onPressed: _signOut,
-            icon: const Icon(Icons.logout, color: Colors.red),
-            label: const Text('Log Out', style: TextStyle(color: Colors.red)),
-          ),
+          if (mobile.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.phone, size: 16, color: Colors.grey),
+                  const SizedBox(width: 6),
+                  Text(mobile, style: TextStyle(color: Colors.grey[700])),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -214,30 +215,42 @@ class _TenantProfileTabState extends State<TenantProfileTab>
 
   Widget _buildTabs() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(14),
       ),
       child: TabBar(
         controller: _tabController,
-        labelColor: AppConfig.primaryColor,
-        unselectedLabelColor: Colors.grey[600],
-        indicator: UnderlineTabIndicator(
-          borderSide: BorderSide(color: AppConfig.primaryColor, width: 2.5),
-          insets: const EdgeInsets.symmetric(horizontal: 24),
+        splashFactory: NoSplash.splashFactory,
+        dividerColor: Colors.transparent,
+        indicator: BoxDecoration(
+          color: AppConfig.primaryColor,
+          borderRadius: BorderRadius.circular(10),
         ),
+        labelColor: Colors.white,
+        unselectedLabelColor: AppConfig.primaryColor,
+        labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+        unselectedLabelStyle:
+            const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
         tabs: const [
-          Tab(icon: Icon(Icons.event_available), text: 'Bookings'),
-          Tab(icon: Icon(Icons.description_outlined), text: 'Documents'),
-          Tab(icon: Icon(Icons.settings_outlined), text: 'Preferences'),
+          SizedBox(
+              width: 120,
+              child: Tab(
+                  icon: Icon(Icons.event_available, size: 20),
+                  text: 'Bookings')),
+          SizedBox(
+              width: 120,
+              child: Tab(
+                  icon: Icon(Icons.description_outlined, size: 20),
+                  text: 'Documents')),
+          SizedBox(
+            width: 120,
+            child: Tab(
+                icon: Icon(Icons.settings_outlined, size: 20),
+                text: 'Preferences'),
+          ),
         ],
       ),
     );
@@ -303,34 +316,82 @@ class _TenantProfileTabState extends State<TenantProfileTab>
 
 // ============ Bookings Tab (UI placeholder like the shared mock) ============
 class _BookingsTab extends StatelessWidget {
+  final Future<void> Function() onSignOut;
+  const _BookingsTab({required this.onSignOut});
+
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _Section(
-              title: 'My Bookings',
-              trailing:
-                  TextButton(onPressed: () {}, child: const Text('View All'))),
-          _BookingCard(),
-          const SizedBox(height: 16),
-          _Section(title: 'Help & Support'),
-          _ListTileCard(
-            leading:
-                const Icon(Icons.support_agent_outlined, color: Colors.black87),
-            title: 'Contact Support',
-            onTap: () {},
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _Section(
+                  title: 'My Bookings',
+                  trailing: TextButton(
+                    onPressed: () {},
+                    child: const Text('View All'),
+                  ),
+                ),
+                _BookingCard(),
+                const SizedBox(height: 20),
+                _Section(title: 'Help & Support'),
+                _ListTileCard(
+                  leading: const Icon(Icons.support_agent_outlined,
+                      color: Colors.black87),
+                  title: 'Contact Support',
+                  onTap: () {},
+                ),
+                _ListTileCard(
+                  leading: const Icon(Icons.bug_report_outlined,
+                      color: Colors.black87),
+                  title: 'Report an Issue',
+                  onTap: () {},
+                ),
+              ],
+            ),
           ),
-          _ListTileCard(
-            leading:
-                const Icon(Icons.bug_report_outlined, color: Colors.black87),
-            title: 'Report an Issue',
-            onTap: () {},
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          child: GestureDetector(
+            onTap: onSignOut,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.logout, color: Colors.red, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Log Out',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -339,30 +400,59 @@ class _BookingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: _cardDecoration(),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(12),
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(
-            'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=80&q=80',
-            width: 56,
-            height: 56,
-            fit: BoxFit.cover,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          )
+        ],
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=120&q=80',
+              width: 64,
+              height: 64,
+              fit: BoxFit.cover,
+            ),
           ),
-        ),
-        title: const Text('Luxury Beach Resort'),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            SizedBox(height: 4),
-            Text('Mar 15 - Mar 20, 2024'),
-            SizedBox(height: 6),
-            _StatusChip(label: 'Upcoming', color: Color(0xFF1976D2)),
-          ],
-        ),
-        onTap: () {},
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Luxury Beach Resort',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Mar 15 - Mar 20, 2024',
+                  style: TextStyle(fontSize: 13, color: Colors.black87),
+                ),
+                SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: _StatusChip(
+                    label: 'Upcoming',
+                    color: Color(0xFF1976D2),
+                  ),
+                )
+              ],
+            ),
+          )
+        ],
       ),
     );
   }
@@ -373,10 +463,36 @@ class _DocumentsTab extends StatelessWidget {
   final String email;
   const _DocumentsTab({required this.email});
 
-  static const List<String> _docTypes = [
-    'Passport',
-    "Driver's License",
-    'ID Card',
+  static const List<_DocType> _docTypes = [
+    _DocType(
+      label: 'Proof of Identity',
+      options: [
+        'Aadhaar Card',
+        'Passport',
+        'Voter ID',
+        "Driver's License",
+      ],
+      docKey: 'Proof of Identity',
+    ),
+    _DocType(
+      label: 'Proof of Address',
+      options: [
+        'Aadhaar Card',
+        'Utility Bill',
+        'Bank Statement',
+      ],
+      docKey: 'Proof of Address',
+    ),
+    _DocType(
+      label: 'PAN Card',
+      options: ['PAN Card'],
+      docKey: 'PAN Card',
+    ),
+    _DocType(
+      label: 'Passport-Sized Photograph',
+      options: ['Photograph 1'],
+      docKey: 'Passport Photo',
+    ),
   ];
 
   @override
@@ -386,9 +502,14 @@ class _DocumentsTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Section(title: 'My Documents'),
+          _Section(title: 'Documents for Rent Agreement'),
           const SizedBox(height: 8),
-          ..._docTypes.map((t) => _DocumentTile(email: email, docType: t)),
+          ..._docTypes.map((t) => _DocumentTile(
+                email: email,
+                docType: t.docKey,
+                label: t.label,
+                options: t.options,
+              )),
         ],
       ),
     );
@@ -398,7 +519,14 @@ class _DocumentsTab extends StatelessWidget {
 class _DocumentTile extends StatefulWidget {
   final String email;
   final String docType;
-  const _DocumentTile({required this.email, required this.docType});
+  final String label;
+  final List<String> options;
+  const _DocumentTile({
+    required this.email,
+    required this.docType,
+    required this.label,
+    required this.options,
+  });
 
   @override
   State<_DocumentTile> createState() => _DocumentTileState();
@@ -406,8 +534,15 @@ class _DocumentTile extends StatefulWidget {
 
 class _DocumentTileState extends State<_DocumentTile> {
   bool _uploading = false;
+  String? _selectedOption;
 
   Future<void> _pickAndUpload() async {
+    if (widget.options.length > 1 &&
+        (_selectedOption == null || _selectedOption!.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select a document type')));
+      return;
+    }
     try {
       setState(() => _uploading = true);
       final picker = ImagePicker();
@@ -426,14 +561,15 @@ class _DocumentTileState extends State<_DocumentTile> {
           .collection('Documents')
           .doc(widget.docType)
           .set({
-        'name': widget.docType,
+        'name': widget.label,
+        'option': _selectedOption ?? widget.options.first,
         'url': url,
-        'status': 'Pending',
+        'status': 'Uploaded',
         'uploadedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${widget.docType} uploaded')));
+          .showSnackBar(SnackBar(content: Text('${widget.label} uploaded')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -457,8 +593,8 @@ class _DocumentTileState extends State<_DocumentTile> {
         final data = snap.data?.data();
         final url = data?['url'] as String?;
         final status = (data?['status'] as String?) ?? 'Not uploaded';
-        final isVerified = status.toLowerCase() == 'verified';
-        final isPending = status.toLowerCase() == 'pending';
+        final option = data?['option'] as String?;
+        final isUploaded = status.toLowerCase() == 'uploaded';
 
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
@@ -466,16 +602,38 @@ class _DocumentTileState extends State<_DocumentTile> {
           child: ListTile(
             leading: const Icon(Icons.insert_drive_file_outlined,
                 color: Colors.black87),
-            title: Text(widget.docType),
-            subtitle: Row(
+            title: Text(widget.label),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _StatusChip(
-                  label: status,
-                  color: isVerified
-                      ? const Color(0xFF2E7D32)
-                      : isPending
-                          ? const Color(0xFFF9A825)
-                          : Colors.grey,
+                if (widget.options.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: DropdownButton<String>(
+                      value: _selectedOption ?? option,
+                      hint: const Text('Select type'),
+                      items: widget.options
+                          .map(
+                              (o) => DropdownMenuItem(value: o, child: Text(o)))
+                          .toList(),
+                      onChanged: (v) => setState(() => _selectedOption = v),
+                      isExpanded: true,
+                    ),
+                  ),
+                Row(
+                  children: [
+                    _StatusChip(
+                      label: isUploaded ? 'Uploaded' : 'Not uploaded',
+                      color: isUploaded ? const Color(0xFF1976D2) : Colors.grey,
+                    ),
+                    if (option != null && option.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: Text(option,
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.grey)),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -520,6 +678,14 @@ class _DocumentTileState extends State<_DocumentTile> {
       ),
     );
   }
+}
+
+class _DocType {
+  final String label;
+  final List<String> options;
+  final String docKey;
+  const _DocType(
+      {required this.label, required this.options, required this.docKey});
 }
 
 // ============ Preferences Tab (editable profile) ============
@@ -581,6 +747,7 @@ class _PreferencesTabState extends State<_PreferencesTab> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -630,19 +797,35 @@ class _PreferencesTabState extends State<_PreferencesTab> {
                 _genderPicker(),
                 const SizedBox(height: 16),
                 SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _saving ? null : _save,
-                    icon: _saving
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.save_outlined),
-                    label: const Text('Save changes'),
-                  ),
-                ),
+                    width: width - 20,
+                    child: ElevatedButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Icon(Icons.save_outlined,
+                              color: Colors.white),
+                      label: const Text('Save changes'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue, // Button background
+                        foregroundColor: Colors.white, // Text and icon color
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(8), // Reduced radius
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        textStyle: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w500),
+                      ),
+                    )),
               ],
             ),
           ),
