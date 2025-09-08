@@ -7,6 +7,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
+import 'dart:developer' as developer;
 
 // Property model class
 class Property {
@@ -2117,6 +2118,57 @@ class Api {
         )
         .snapshots();
   }
+  
+  // Helper method for recent views collection reference
+  static CollectionReference<Map<String, dynamic>> _recentViewsRootCollection() {
+    return _firestore.collection('Tenants');
+  }
+  
+  // Add or update recently viewed property
+  static Future<void> addRecentlyViewedProperty({
+    required String tenantEmail,
+    required String propertyId,
+    required Map<String, dynamic> propertyData,
+  }) async {
+    if (tenantEmail.isEmpty || propertyId.isEmpty) return;
+    try {
+      final tenantDoc = _recentViewsRootCollection().doc(tenantEmail);
+      final recentViewsCollection = tenantDoc.collection('RecentViews');
+      final propertyDoc = recentViewsCollection.doc(propertyId);
+      
+      // Get current count of recent views to manage limit
+      final recentViewsQuery = await recentViewsCollection
+          .orderBy('viewedAt', descending: true)
+          .get();
+      
+      await _firestore.runTransaction((tx) async {
+        // Update or create the viewed property document
+        final dataToSave = Map<String, dynamic>.from(propertyData);
+        dataToSave['propertyId'] = propertyId;
+        dataToSave['viewedAt'] = FieldValue.serverTimestamp();
+        
+        tx.set(propertyDoc, dataToSave, SetOptions(merge: true));
+        
+        // If we have more than 10 items, delete the oldest ones
+        if (recentViewsQuery.docs.length >= 10) {
+          // Skip the current property if it exists in the list
+          final docsToDelete = recentViewsQuery.docs
+              .where((doc) => doc.id != propertyId)
+              .skip(9) // Keep 9 items + the current one = 10 total
+              .toList();
+              
+          for (final docToDelete in docsToDelete) {
+            tx.delete(recentViewsCollection.doc(docToDelete.id));
+          }
+        }
+      });
+      
+      developer.log('Added property $propertyId to recently viewed');
+    } catch (e) {
+      developer.log('Error adding recently viewed property: $e');
+      // Don't rethrow as this is a non-critical feature
+    }
+  }
 
   // Fetch saved property IDs (one-off)
   static Future<Set<String>> getSavedPropertyIds(String tenantEmail) async {
@@ -2131,5 +2183,42 @@ class Api {
       print('Error fetching saved property IDs: $e');
       return {};
     }
+  }
+  
+  // Get recently viewed properties (limited to 5 by default)
+  static Future<List<Property>> getRecentlyViewedProperties(
+      String tenantEmail, {int limit = 5}) async {
+    if (tenantEmail.isEmpty) return [];
+    try {
+      final snap = await _recentViewsRootCollection()
+          .doc(tenantEmail)
+          .collection('RecentViews')
+          .orderBy('viewedAt', descending: true)
+          .limit(limit)
+          .get();
+          
+      return snap.docs.map((doc) {
+        final data = doc.data();
+        final ownerId = data['ownerId'] as String? ?? '';
+        return Property.fromFirestore(doc, ownerId);
+      }).toList();
+    } catch (e) {
+      developer.log('Error fetching recently viewed properties: $e');
+      return [];
+    }
+  }
+  
+  // Stream of recently viewed properties
+  static Stream<QuerySnapshot<Map<String, dynamic>>> streamRecentlyViewedProperties(
+      String tenantEmail, {int limit = 5}) {
+    if (tenantEmail.isEmpty) {
+      return const Stream<QuerySnapshot<Map<String, dynamic>>>.empty();
+    }
+    return _recentViewsRootCollection()
+        .doc(tenantEmail)
+        .collection('RecentViews')
+        .orderBy('viewedAt', descending: true)
+        .limit(limit)
+        .snapshots();
   }
 }

@@ -64,6 +64,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
     // Load property data
     _loadPropertyData();
     _checkIfSaved();
+    _trackPropertyView();
 
     // Listen for tab changes
     _tabController.addListener(() {
@@ -86,6 +87,45 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
       }
     } catch (e) {
       // silent fail
+    }
+  }
+
+  Future<void> _trackPropertyView() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser?.email;
+      final propertyId = widget.propertyData?['id'] ?? widget.propertyId;
+      if (user != null && propertyId != null) {
+        // Create a map with all the property data needed for display
+        final propertyData = widget.propertyData ?? <String, dynamic>{};
+
+        // Ensure we have the minimum required data
+        if (!propertyData.containsKey('id')) {
+          propertyData['id'] = propertyId;
+        }
+
+        // Add other essential display fields if available from widget parameters
+        if (widget.price != null && !propertyData.containsKey('price')) {
+          propertyData['price'] = widget.price;
+        }
+
+        if (widget.location != null && !propertyData.containsKey('location')) {
+          propertyData['location'] = widget.location;
+        }
+
+        if (widget.imagePath != null && !propertyData.containsKey('images')) {
+          propertyData['images'] = [widget.imagePath];
+        }
+
+        // Record this view in Firestore
+        await Api.addRecentlyViewedProperty(
+          tenantEmail: user,
+          propertyId: propertyId,
+          propertyData: propertyData,
+        );
+      }
+    } catch (e) {
+      // silent fail for tracking
+      print('Error tracking property view: $e');
     }
   }
 

@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
@@ -929,41 +930,101 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
 
               // Recently Viewed Section
               SizedBox(height: height * 0.02),
-              Text(
-                'Recently Viewed',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Recently Viewed',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      // Navigate to all recently viewed properties
+                    },
+                    child: Text('See All'),
+                  ),
+                ],
               ),
               SizedBox(height: height * 0.01),
 
               // Recently Viewed Properties Row
               Container(
                 height: height * 0.28,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _buildPropertyCard(
-                      price: '\$1,400/mo',
-                      location: 'SoHo',
-                      rating: null,
-                      imagePath:
-                          'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg',
-                      width: width * 0.6,
-                      height: height * 0.26,
-                    ),
-                    SizedBox(width: 12),
-                    _buildPropertyCard(
-                      price: '\$1,750/mo',
-                      location: 'Greenwich Village',
-                      rating: null,
-                      imagePath:
-                          'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg',
-                      width: width * 0.6,
-                      height: height * 0.26,
-                    ),
-                  ],
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: Api.streamRecentlyViewedProperties(
+                    FirebaseAuth.instance.currentUser?.email ?? '',
+                    limit: 5,
+                  ),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return Center(
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                              AppConfig.primaryColor),
+                        ),
+                      );
+                    }
+
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline,
+                                color: Colors.red[300], size: 32),
+                            SizedBox(height: 8),
+                            Text(
+                              'Error loading recently viewed properties',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    final docs = snapshot.data?.docs ?? [];
+
+                    if (docs.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.history,
+                                color: Colors.grey[400], size: 32),
+                            SizedBox(height: 8),
+                            Text(
+                              'No recently viewed properties',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: docs.length,
+                      itemBuilder: (context, index) {
+                        final data = docs[index].data();
+                        final ownerId = data['ownerId'] as String? ?? '';
+                        final property =
+                            Property.fromFirestore(docs[index], ownerId);
+                        return Padding(
+                          padding: EdgeInsets.only(
+                            right: index < docs.length - 1 ? 12 : 0,
+                          ),
+                          child: _buildPropertyCardFromProperty(
+                            property: property,
+                            width: width * 0.6,
+                            height: height * 0.26,
+                          ),
+                        );
+                      },
+                    );
+                  },
                 ),
               ),
             ],
