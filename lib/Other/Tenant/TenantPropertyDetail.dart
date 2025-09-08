@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:video_player/video_player.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -30,7 +31,10 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
     with TickerProviderStateMixin {
   bool _isSaved = false;
   late TabController _tabController;
-  int _currentImageIndex = 0;
+  int _currentMediaIndex = 0; // unified index for images + optional video
+  bool _isVideoSelected = false;
+  VideoPlayerController? _videoController;
+  Future<void>? _initializeVideoFuture;
 
   // Sample images for the thumbnail gallery
   List<String> roomImages = [
@@ -53,7 +57,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+  _tabController = TabController(length: 3, vsync: this);
 
     // Load property data
     _loadPropertyData();
@@ -165,13 +169,20 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
 
   @override
   void dispose() {
-    _tabController.dispose();
+  _videoController?.dispose();
+  _tabController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final height = MediaQuery.of(context).size.height;
+  final height = MediaQuery.of(context).size.height;
+  final videoUrl = widget.propertyData?['video'] ?? widget.propertyData?['videoUrl'];
+
+  // Build combined media list: images + (video placeholder at end if exists)
+  final int imageCount = roomImages.length;
+  final bool hasVideo = videoUrl != null && videoUrl.toString().isNotEmpty;
+  final int totalMediaItems = hasVideo ? imageCount + 1 : imageCount;
     // Extract property data
     final propertyType = widget.propertyData?['propertyType'] ?? 'House';
     final roomType = widget.propertyData?['roomType'] ?? 'N/A';
@@ -246,47 +257,111 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Main image display
+            // Main media display (image or video)
             AspectRatio(
               aspectRatio: 16 / 9,
-              child: PageView.builder(
-                itemCount: roomImages.length,
-                onPageChanged: (index) {
-                  setState(() {
-                    _currentImageIndex = index;
-                  });
-                },
-                itemBuilder: (context, index) {
-                  return Image.network(
-                    roomImages[index],
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: Colors.grey[300],
-                        child: Center(
-                          child: Icon(Icons.broken_image,
-                              size: 50, color: Colors.grey[500]),
+              child: _isVideoSelected && hasVideo
+                  ? Stack(
+                      children: [
+                        FutureBuilder(
+                          future: _initializeVideoFuture,
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.done) {
+                              return GestureDetector(
+                                onTap: () {
+                                  if (_videoController == null) return;
+                                  setState(() {
+                                    if (_videoController!.value.isPlaying) {
+                                      _videoController!.pause();
+                                    } else {
+                                      _videoController!.play();
+                                    }
+                                  });
+                                },
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    VideoPlayer(_videoController!),
+                                    if (!_videoController!.value.isPlaying)
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.35),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        padding: EdgeInsets.all(16),
+                                        child: Icon(Icons.play_arrow, size: 48, color: Colors.white),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            } else {
+                              return Center(child: CircularProgressIndicator());
+                            }
+                          },
                         ),
-                      );
-                    },
-                  );
-                },
-              ),
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: _buildMediaCounter(totalMediaItems),
+                        )
+                      ],
+                    )
+                  : Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.network(
+                          roomImages.isNotEmpty && _currentMediaIndex < roomImages.length
+                              ? roomImages[_currentMediaIndex]
+                              : (roomImages.isNotEmpty ? roomImages.first : ''),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Colors.grey[300],
+                              child: Center(
+                                child: Icon(Icons.broken_image, size: 50, color: Colors.grey[500]),
+                              ),
+                            );
+                          },
+                        ),
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: _buildMediaCounter(totalMediaItems),
+                        )
+                      ],
+                    ),
             ),
 
-            // Image thumbnails
+            // Media thumbnails (images + optional video)
             Container(
               height: 80,
               padding: EdgeInsets.symmetric(vertical: 10),
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                itemCount: roomImages.length,
+                itemCount: totalMediaItems,
                 padding: EdgeInsets.symmetric(horizontal: 16),
                 itemBuilder: (context, index) {
+                  final bool isVideoThumb = hasVideo && index == totalMediaItems - 1;
+                  final bool isSelected = _currentMediaIndex == index && _isVideoSelected == isVideoThumb;
                   return GestureDetector(
                     onTap: () {
                       setState(() {
-                        _currentImageIndex = index;
+                        if (isVideoThumb) {
+                          _isVideoSelected = true;
+                          _currentMediaIndex = index;
+                          if (_videoController == null || _videoController!.dataSource != videoUrl) {
+                            _videoController?.dispose();
+                            _videoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+                            _initializeVideoFuture = _videoController!.initialize().then((_) {
+                              setState(() {});
+                            });
+                          }
+                        } else {
+                          _isVideoSelected = false;
+                          _currentMediaIndex = index;
+                          // pause video if switching away
+                          _videoController?.pause();
+                        }
                       });
                     },
                     child: Container(
@@ -294,9 +369,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                       margin: EdgeInsets.only(right: 10),
                       decoration: BoxDecoration(
                         border: Border.all(
-                          color: _currentImageIndex == index
-                              ? AppConfig.primaryColor
-                              : Colors.transparent,
+                          color: isSelected ? AppConfig.primaryColor : Colors.transparent,
                           width: 2,
                         ),
                         borderRadius: BorderRadius.circular(8),
@@ -304,14 +377,37 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(6),
-                        child: Image.network(
-                          roomImages[index],
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Center(
-                                child: Icon(Icons.image_not_supported));
-                          },
-                        ),
+                        child: isVideoThumb
+                            ? Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  // Use first image as placeholder background if available
+                                  if (roomImages.isNotEmpty)
+                                    Image.network(
+                                      roomImages.first,
+                                      fit: BoxFit.cover,
+                                    )
+                                  else
+                                    Container(color: Colors.black12),
+                                  Container(
+                                    color: Colors.black26,
+                                  ),
+                                  Center(
+                                    child: Icon(
+                                      Icons.play_circle_fill,
+                                      color: Colors.white,
+                                      size: 32,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Image.network(
+                                roomImages[index],
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Center(child: Icon(Icons.image_not_supported));
+                                },
+                              ),
                       ),
                     ),
                   );
@@ -815,7 +911,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                     'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude';
                 launchMapsUrl(url);
               },
-              icon: Icon(Icons.directions),
+              icon: Icon(Icons.directions, size: 20, color: Colors.white),
               label: Text('Navigate to this location'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppConfig.primaryColor,
@@ -846,10 +942,10 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
         SizedBox(height: 16),
         Row(
           children: [
-            Icon(Icons.location_city, color: Colors.grey[700]),
+            Icon(Icons.location_on_outlined, color: Colors.grey[700]),
             SizedBox(width: 8),
             Text(
-              city + ',' + state,
+              city + ', ' + state,
               style: TextStyle(
                 color: Colors.grey[800],
                 fontSize: 14,
@@ -885,6 +981,21 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildMediaCounter(int total) {
+    if (total <= 1) return SizedBox.shrink();
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        '${_currentMediaIndex + 1}/$total',
+        style: TextStyle(color: Colors.white, fontSize: 12),
+      ),
     );
   }
 
