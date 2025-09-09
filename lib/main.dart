@@ -27,12 +27,14 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
+  @override
+  void initState() {
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: _navKey,
       title: AppConfig.appName,
       theme: ThemeData(
         primaryColor: AppConfig.primaryColor,

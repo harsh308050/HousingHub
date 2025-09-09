@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:housinghub/Helper/API.dart';
+import 'package:housinghub/Other/Chat/ChatScreen.dart';
 import 'package:housinghub/config/AppConfig.dart';
 
 class OwnerChatTab extends StatefulWidget {
@@ -12,65 +16,7 @@ class _OwnerChatTabState extends State<OwnerChatTab> {
   // Controller for search field
   final TextEditingController _searchController = TextEditingController();
 
-  // Sample data for conversations
-  final List<Map<String, dynamic>> _conversations = [
-    {
-      'name': 'Sarah Wilson',
-      'lastMessage':
-          'The apartment looks great! When can I schedule a viewing?',
-      'time': '2m ago',
-      'avatar': 'https://randomuser.me/api/portraits/women/12.jpg',
-      'unread': true,
-      'lastSeen': '',
-      'property': 'Skyline Apartments',
-    },
-    {
-      'name': 'Michael Brown',
-      'lastMessage': 'I\'ve attached my ID for verification. Please check.',
-      'time': '1h ago',
-      'avatar': 'https://randomuser.me/api/portraits/men/32.jpg',
-      'unread': false,
-      'lastSeen': 'Last seen today at 2:30 PM',
-      'property': 'Garden View House',
-    },
-    {
-      'name': 'James Wilson',
-      'lastMessage': 'Perfect! I\'ll send you the details by tomorrow morning.',
-      'time': 'Yesterday',
-      'avatar': 'https://randomuser.me/api/portraits/men/45.jpg',
-      'unread': false,
-      'lastSeen': 'Last seen 2 days ago',
-      'property': 'Downtown Loft',
-    },
-    {
-      'name': 'Lisa Anderson',
-      'lastMessage': 'Thank you for your quick response regarding the rental.',
-      'time': '2 days ago',
-      'avatar': 'https://randomuser.me/api/portraits/women/65.jpg',
-      'unread': false,
-      'lastSeen': 'Last seen 3 days ago',
-      'property': 'Riverside Villa',
-    },
-    {
-      'name': 'David Thompson',
-      'lastMessage':
-          'Would you be open to a 2-year lease with a small discount?',
-      'time': '3 days ago',
-      'avatar': 'https://randomuser.me/api/portraits/men/67.jpg',
-      'unread': false,
-      'lastSeen': 'Last seen 4 days ago',
-      'property': 'Mountain View Condo',
-    },
-    {
-      'name': 'Emily Johnson',
-      'lastMessage': 'Is the parking space included in the monthly rent?',
-      'time': '5 days ago',
-      'avatar': 'https://randomuser.me/api/portraits/women/33.jpg',
-      'unread': false,
-      'lastSeen': 'Last seen 6 days ago',
-      'property': 'Hillside Residences',
-    },
-  ];
+  String _filter = '';
 
   @override
   void dispose() {
@@ -80,16 +26,109 @@ class _OwnerChatTabState extends State<OwnerChatTab> {
 
   @override
   Widget build(BuildContext context) {
+    final me = FirebaseAuth.instance.currentUser?.email;
+    if (me == null) {
+      return Scaffold(
+        body: const Center(child: Text('Sign in to view messages')),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: _buildHeader(),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _buildHeader(),
             _buildSearchBar(),
             Expanded(
-              child: _buildConversationsList(),
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: Api.streamUserRooms(me),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Center(child: Text('Error loading messages'));
+                  }
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final rooms = [...(snapshot.data?.docs ?? [])];
+                  rooms.sort((a, b) {
+                    final ad = a.data();
+                    final bd = b.data();
+                    final at = ad['lastTimestamp'];
+                    final bt = bd['lastTimestamp'];
+                    final aMs = at is Timestamp ? at.millisecondsSinceEpoch : 0;
+                    final bMs = bt is Timestamp ? bt.millisecondsSinceEpoch : 0;
+                    return bMs.compareTo(aMs);
+                  });
+                  if (rooms.isEmpty) {
+                    return _buildEmptyState();
+                  }
+
+                  final meNorm = me.trim().toLowerCase();
+                  final filtered = rooms.where((doc) {
+                    final data = doc.data();
+                    final participants =
+                        ((data['participants'] ?? []) as List).cast<String>();
+                    final other = participants.firstWhere(
+                      (p) => p != meNorm,
+                      orElse: () => 'unknown',
+                    );
+                    final last = (data['lastMessage'] ?? '') as String;
+                    if (_filter.isEmpty) return true;
+                    return other.contains(_filter.toLowerCase()) ||
+                        last.toLowerCase().contains(_filter.toLowerCase());
+                  }).toList();
+
+                  return ListView.separated(
+                    itemCount: filtered.length,
+                    padding: const EdgeInsets.only(top: 8),
+                    separatorBuilder: (context, index) => Divider(
+                      height: 1,
+                      indent: 72,
+                      endIndent: 16,
+                      color: Colors.grey[200],
+                    ),
+                    itemBuilder: (context, index) {
+                      final d = filtered[index].data();
+                      final participants =
+                          ((d['participants'] ?? []) as List).cast<String>();
+                      final other = participants.firstWhere(
+                        (p) => p != meNorm,
+                        orElse: () => 'unknown',
+                      );
+                      final last = (d['lastMessage'] ?? '') as String;
+                      final unread = (d['unreadCounts'] is Map)
+                          ? (d['unreadCounts'][meNorm] ?? 0) as int
+                          : 0;
+                      final timestamp = d['lastTimestamp'] as Timestamp?;
+                      final timeAgo = timestamp != null
+                          ? _getTimeAgo(timestamp.toDate())
+                          : '';
+                      
+                      return _buildConversationItem(
+                        name: other,
+                        lastMessage: last.isEmpty ? 'Attachment' : last,
+                        timeAgo: timeAgo,
+                        unread: unread > 0,
+                        avatarColor: _getAvatarColor(other),
+                        hasAttachment: last.isEmpty,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ChatScreen(
+                                currentEmail: me,
+                                otherEmail: other,
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -106,23 +145,14 @@ class _OwnerChatTabState extends State<OwnerChatTab> {
   }
 
   // Header with "Messages" title
-  PreferredSizeWidget _buildHeader() {
-    return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 0,
-      centerTitle: true,
-      leading: IconButton(
-        icon: Icon(Icons.arrow_back_ios, color: Colors.black, size: 20),
-        onPressed: () {
-          // Navigation will be added later
-          Navigator.pop(context);
-        },
-      ),
-      title: Text(
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Text(
         'Messages',
         style: TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
+          fontSize: 24,
+          fontWeight: FontWeight.bold,
           color: Colors.black,
         ),
       ),
@@ -133,47 +163,50 @@ class _OwnerChatTabState extends State<OwnerChatTab> {
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(25),
-        ),
-        child: TextField(
-          controller: _searchController,
-          decoration: InputDecoration(
-            hintText: 'Search conversations',
-            border: InputBorder.none,
-            prefixIcon: Icon(Icons.search, color: Colors.grey[400], size: 20),
-            hintStyle: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[400],
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search conversations',
+                  border: InputBorder.none,
+                  prefixIcon: Icon(Icons.search, color: Colors.grey[400], size: 20),
+                  hintStyle: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[400],
+                  ),
+                  contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                ),
+                style: TextStyle(fontSize: 16),
+                onChanged: (v) => setState(() => _filter = v),
+              ),
             ),
-            contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           ),
-          style: TextStyle(fontSize: 16),
-        ),
+          const SizedBox(width: 8),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Center(
+              child: Icon(
+                Icons.tune,
+                size: 20,
+                color: Colors.black,
+              ),
+            ),
+          ),
+        ],
       ),
-    );
-  }
-
-  // List of conversations
-  Widget _buildConversationsList() {
-    if (_conversations.isEmpty) {
-      return _buildEmptyState();
-    }
-
-    return ListView.separated(
-      itemCount: _conversations.length,
-      padding: EdgeInsets.only(top: 8),
-      separatorBuilder: (context, index) => Divider(
-        height: 1,
-        indent: 72, // Align with the end of avatar
-        endIndent: 16,
-        color: Colors.grey[200],
-      ),
-      itemBuilder: (context, index) {
-        return _buildConversationItem(_conversations[index]);
-      },
     );
   }
 
@@ -212,30 +245,39 @@ class _OwnerChatTabState extends State<OwnerChatTab> {
   }
 
   // Individual conversation list item
-  Widget _buildConversationItem(Map<String, dynamic> conversation) {
+  Widget _buildConversationItem({
+    required String name,
+    required String lastMessage,
+    required String timeAgo,
+    required bool unread,
+    required Color avatarColor,
+    required bool hasAttachment,
+    VoidCallback? onTap,
+  }) {
     return InkWell(
-      onTap: () {
-        // Navigate to conversation detail screen
-        // Will implement later when functionality is added
-      },
+      onTap: onTap,
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            // Avatar with status indicator
+            // Avatar with first letter or status indicator
             Stack(
               children: [
                 CircleAvatar(
-                  radius: 28,
-                  backgroundImage: NetworkImage(conversation['avatar']),
+                  radius: 24,
+                  backgroundColor: avatarColor,
+                  child: Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : '?',
+                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                 ),
-                if (conversation['unread'])
+                if (unread)
                   Positioned(
                     right: 0,
                     bottom: 0,
                     child: Container(
-                      width: 14,
-                      height: 14,
+                      width: 12,
+                      height: 12,
                       decoration: BoxDecoration(
                         color: Colors.green,
                         shape: BoxShape.circle,
@@ -257,63 +299,46 @@ class _OwnerChatTabState extends State<OwnerChatTab> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        conversation['name'],
+                        name,
                         style: TextStyle(
-                          fontWeight: FontWeight.w600,
+                          fontWeight: unread ? FontWeight.bold : FontWeight.w500,
                           fontSize: 16,
                           color: Colors.black87,
                         ),
                       ),
                       Text(
-                        conversation['time'],
+                        timeAgo,
                         style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[500],
+                          fontSize: 12,
+                          color: unread ? AppConfig.primaryColor : Colors.grey[500],
+                          fontWeight: unread ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
                     ],
                   ),
-                  SizedBox(height: 2),
-
-                  // Property name
-                  Text(
-                    'About: ${conversation['property']}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppConfig.primaryColor,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-
-                  SizedBox(height: 2),
-
-                  // Last message
-                  Text(
-                    conversation['lastMessage'],
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                      fontWeight: conversation['unread']
-                          ? FontWeight.w500
-                          : FontWeight.normal,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-
-                  // Last seen (if available)
-                  if (conversation['lastSeen'].isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2.0),
-                      child: Text(
-                        conversation['lastSeen'],
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[400],
-                          fontStyle: FontStyle.italic,
+                  SizedBox(height: 4),
+                  // Last message with attachment icon if needed
+                  Row(
+                    children: [
+                      if (hasAttachment)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: Icon(Icons.attach_file, size: 14, color: Colors.grey[600]),
+                        ),
+                      Expanded(
+                        child: Text(
+                          lastMessage,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: unread ? Colors.black87 : Colors.grey[600],
+                            fontWeight: unread ? FontWeight.w500 : FontWeight.normal,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -321,5 +346,39 @@ class _OwnerChatTabState extends State<OwnerChatTab> {
         ),
       ),
     );
+  }
+  
+  // Helper function to get time ago string
+  String _getTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+    
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    }
+  }
+  
+  // Helper function to generate consistent avatar colors
+  Color _getAvatarColor(String name) {
+    final colors = [
+      Color(0xFF1ABC9C), // Turquoise
+      Color(0xFF3498DB), // Blue
+      Color(0xFF9B59B6), // Purple
+      Color(0xFFE74C3C), // Red
+      Color(0xFFE67E22), // Orange
+      Color(0xFF2ECC71), // Green
+    ];
+    
+    // Use a hash of the name to pick a consistent color
+    final hash = name.codeUnits.fold(0, (prev, element) => prev + element);
+    return colors[hash % colors.length];
   }
 }

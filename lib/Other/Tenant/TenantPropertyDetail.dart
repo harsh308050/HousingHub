@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../Chat/ChatScreen.dart';
 
 class TenantPropertyDetail extends StatefulWidget {
   final String? propertyId;
@@ -680,8 +681,30 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('Chat functionality coming soon')));
+                        final me = FirebaseAuth.instance.currentUser?.email;
+                        final ownerEmail =
+                            widget.propertyData?['ownerEmail']?.toString();
+                        if (me == null ||
+                            ownerEmail == null ||
+                            ownerEmail.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text(
+                                    'Sign in to chat or owner info missing')),
+                          );
+                          return;
+                        }
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ChatScreen(
+                              currentEmail: me,
+                              otherEmail: ownerEmail,
+                              otherName:
+                                  widget.propertyData?['ownerName']?.toString(),
+                            ),
+                          ),
+                        );
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,

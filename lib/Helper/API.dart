@@ -743,6 +743,9 @@ class Api {
     }
   }
 
+  // Store/update FCM device token for a user (used by server to send pushes)
+  // Notifications removed: saveFcmToken no longer needed.
+
   // Create a new owner in Firestore if not exists
   static Future<void> createOwnerIfNotExists(String mobileNumber,
       String fullName, String email, String city, String state) async {
@@ -2118,12 +2121,13 @@ class Api {
         )
         .snapshots();
   }
-  
+
   // Helper method for recent views collection reference
-  static CollectionReference<Map<String, dynamic>> _recentViewsRootCollection() {
+  static CollectionReference<Map<String, dynamic>>
+      _recentViewsRootCollection() {
     return _firestore.collection('Tenants');
   }
-  
+
   // Add or update recently viewed property
   static Future<void> addRecentlyViewedProperty({
     required String tenantEmail,
@@ -2135,20 +2139,20 @@ class Api {
       final tenantDoc = _recentViewsRootCollection().doc(tenantEmail);
       final recentViewsCollection = tenantDoc.collection('RecentViews');
       final propertyDoc = recentViewsCollection.doc(propertyId);
-      
+
       // Get current count of recent views to manage limit
       final recentViewsQuery = await recentViewsCollection
           .orderBy('viewedAt', descending: true)
           .get();
-      
+
       await _firestore.runTransaction((tx) async {
         // Update or create the viewed property document
         final dataToSave = Map<String, dynamic>.from(propertyData);
         dataToSave['propertyId'] = propertyId;
         dataToSave['viewedAt'] = FieldValue.serverTimestamp();
-        
+
         tx.set(propertyDoc, dataToSave, SetOptions(merge: true));
-        
+
         // If we have more than 10 items, delete the oldest ones
         if (recentViewsQuery.docs.length >= 10) {
           // Skip the current property if it exists in the list
@@ -2156,13 +2160,13 @@ class Api {
               .where((doc) => doc.id != propertyId)
               .skip(9) // Keep 9 items + the current one = 10 total
               .toList();
-              
+
           for (final docToDelete in docsToDelete) {
             tx.delete(recentViewsCollection.doc(docToDelete.id));
           }
         }
       });
-      
+
       developer.log('Added property $propertyId to recently viewed');
     } catch (e) {
       developer.log('Error adding recently viewed property: $e');
@@ -2184,10 +2188,168 @@ class Api {
       return {};
     }
   }
-  
+
+  // =============================
+  // CHAT: Tenant ↔ Owner (1:1)
+  // Collection: Messages/{roomId}/Chats/{chatId}
+  // roomId = min(email1,email2)_max(email1,email2)
+  // Room doc keeps metadata: participants, lastMessage, lastTimestamp, unreadCounts
+  // =============================
+  static String _normEmail(String e) => e.trim().toLowerCase();
+  static String chatRoomIdFor(String a, String b) {
+    final e1 = _normEmail(a);
+    final e2 = _normEmail(b);
+    return e1.compareTo(e2) <= 0 ? '${e1}_$e2' : '${e2}_$e1';
+  }
+
+  static DocumentReference<Map<String, dynamic>> _roomRef(String roomId) =>
+      _firestore.collection('Messages').doc(roomId);
+
+  static CollectionReference<Map<String, dynamic>> _chatsCol(String roomId) =>
+      _roomRef(roomId).collection('Chats');
+
+  static Future<void> _ensureRoom(String a, String b) async {
+    final roomId = chatRoomIdFor(a, b);
+    final room = _roomRef(roomId);
+    final snap = await room.get();
+    if (!snap.exists) {
+      await room.set({
+        'participants': [_normEmail(a), _normEmail(b)],
+        'unreadCounts': {
+          _normEmail(a): 0,
+          _normEmail(b): 0,
+        },
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+  }
+
+  static Future<void> sendChatMessage({
+    required String senderEmail,
+    required String receiverEmail,
+    String? text,
+    String? attachmentUrl,
+  }) async {
+    final roomId = chatRoomIdFor(senderEmail, receiverEmail);
+    await _ensureRoom(senderEmail, receiverEmail);
+
+    final msgData = <String, dynamic>{
+      'senderId': _normEmail(senderEmail),
+      'receiverId': _normEmail(receiverEmail),
+      'text': (text ?? '').trim(),
+      'attachment': attachmentUrl,
+      'isRead': false,
+      'timestamp': FieldValue.serverTimestamp(),
+    };
+
+    await _firestore.runTransaction((tx) async {
+      final room = _roomRef(roomId);
+
+      // READS FIRST: get the current room snapshot before any writes
+      final roomSnap = await tx.get(room);
+      Map<String, dynamic> unread = {};
+      if (roomSnap.exists) {
+        final data = roomSnap.data() as Map<String, dynamic>;
+        if (data['unreadCounts'] is Map<String, dynamic>) {
+          unread = Map<String, dynamic>.from(data['unreadCounts']);
+        }
+      }
+      final recv = _normEmail(receiverEmail);
+      unread[recv] = (unread[recv] ?? 0) + 1;
+
+      // WRITES AFTER READS: create the chat message
+      final chats = _chatsCol(roomId).doc();
+      tx.set(chats, msgData);
+
+      // Update room meta
+      tx.set(
+        room,
+        {
+          'lastMessage': (text != null && text.trim().isNotEmpty)
+              ? text.trim()
+              : (attachmentUrl != null ? 'Attachment' : ''),
+          'lastTimestamp': FieldValue.serverTimestamp(),
+          'lastSender': _normEmail(senderEmail),
+          'unreadCounts': unread,
+          'participants': [_normEmail(senderEmail), _normEmail(receiverEmail)],
+        },
+        SetOptions(merge: true),
+      );
+    });
+  }
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>> streamChatMessages(
+      String a, String b) {
+    final roomId = chatRoomIdFor(a, b);
+    return _chatsCol(roomId)
+        .orderBy('timestamp', descending: false)
+        .snapshots();
+  }
+
+  static Future<void> markChatAsRead({
+    required String currentEmail,
+    required String otherEmail,
+  }) async {
+    final me = _normEmail(currentEmail);
+    final other = _normEmail(otherEmail);
+    final roomId = chatRoomIdFor(me, other);
+    final room = _roomRef(roomId);
+
+    // Mark messages as read (batched in chunks)
+    const int limit = 300;
+    Query<Map<String, dynamic>> q = _chatsCol(roomId)
+        .where('receiverId', isEqualTo: me)
+        .where('isRead', isEqualTo: false)
+        .orderBy('timestamp', descending: false)
+        .limit(limit);
+    final snap = await q.get();
+    final batch = _firestore.batch();
+    for (final d in snap.docs) {
+      batch.update(d.reference, {'isRead': true});
+    }
+    batch.set(
+        room,
+        {
+          'unreadCounts': {me: 0},
+          'lastReadAt': {_normEmail(me): FieldValue.serverTimestamp()},
+        },
+        SetOptions(merge: true));
+    await batch.commit();
+  }
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>> streamUserRooms(
+      String userEmail) {
+    // Avoid requiring a composite index by not ordering at query time.
+    // Consumers should sort client-side by 'lastTimestamp' desc.
+    return _firestore
+        .collection('Messages')
+        .where('participants', arrayContains: _normEmail(userEmail))
+        .snapshots();
+  }
+
+  // Upload any chat attachment to Cloudinary (auto resource type)
+  static Future<String> uploadChatAttachment(File file,
+      {String folder = 'chat_attachments'}) async {
+    try {
+      final cloudinary =
+          CloudinaryPublic('debf09qz0', 'HousingHub', cache: false);
+      final response = await cloudinary.uploadFile(
+        CloudinaryFile.fromFile(
+          file.path,
+          folder: folder,
+          resourceType: CloudinaryResourceType.Auto,
+        ),
+      );
+      return response.secureUrl;
+    } catch (e) {
+      print('Error uploading chat attachment: $e');
+      rethrow;
+    }
+  }
+
   // Get recently viewed properties (limited to 5 by default)
-  static Future<List<Property>> getRecentlyViewedProperties(
-      String tenantEmail, {int limit = 5}) async {
+  static Future<List<Property>> getRecentlyViewedProperties(String tenantEmail,
+      {int limit = 5}) async {
     if (tenantEmail.isEmpty) return [];
     try {
       final snap = await _recentViewsRootCollection()
@@ -2196,7 +2358,7 @@ class Api {
           .orderBy('viewedAt', descending: true)
           .limit(limit)
           .get();
-          
+
       return snap.docs.map((doc) {
         final data = doc.data();
         final ownerId = data['ownerId'] as String? ?? '';
@@ -2207,10 +2369,10 @@ class Api {
       return [];
     }
   }
-  
+
   // Stream of recently viewed properties
-  static Stream<QuerySnapshot<Map<String, dynamic>>> streamRecentlyViewedProperties(
-      String tenantEmail, {int limit = 5}) {
+  static Stream<QuerySnapshot<Map<String, dynamic>>>
+      streamRecentlyViewedProperties(String tenantEmail, {int limit = 5}) {
     if (tenantEmail.isEmpty) {
       return const Stream<QuerySnapshot<Map<String, dynamic>>>.empty();
     }
