@@ -19,7 +19,8 @@ class TenantHomeScreen extends StatefulWidget {
   State<TenantHomeScreen> createState() => _TenantHomeScreenState();
 }
 
-class _TenantHomeScreenState extends State<TenantHomeScreen> {
+class _TenantHomeScreenState extends State<TenantHomeScreen> 
+    with WidgetsBindingObserver {
   int _selectedIndex = 0;
   late List<Widget> _screens;
   User? _currentUser;
@@ -33,7 +34,13 @@ class _TenantHomeScreenState extends State<TenantHomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _currentUser = FirebaseAuth.instance.currentUser;
+
+    // Update user presence when app starts
+    if (_currentUser?.email != null) {
+      Api.updateUserPresence(_currentUser!.email!);
+    }
 
     // Fetch user data from Firestore
     _fetchTenantData();
@@ -218,6 +225,35 @@ class _TenantHomeScreenState extends State<TenantHomeScreen> {
       ),
       bottomNavigationBar: _buildBottomNavigationBar(),
     );
+  }
+
+  // Handle app lifecycle changes for presence tracking
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (_currentUser?.email != null) {
+      switch (state) {
+        case AppLifecycleState.resumed:
+          Api.updateUserPresence(_currentUser!.email!);
+          break;
+        case AppLifecycleState.paused:
+        case AppLifecycleState.inactive:
+        case AppLifecycleState.detached:
+          Api.setUserOffline(_currentUser!.email!);
+          break;
+        case AppLifecycleState.hidden:
+          break;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    if (_currentUser?.email != null) {
+      Api.setUserOffline(_currentUser!.email!);
+    }
+    super.dispose();
   }
 
   Widget _buildBottomNavigationBar() {

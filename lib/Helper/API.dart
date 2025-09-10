@@ -2511,4 +2511,111 @@ class Api {
       rethrow;
     }
   }
+
+  // User presence tracking functions
+
+  // Update user's last seen timestamp (call when user is active)
+  static Future<void> updateUserPresence(String email) async {
+    try {
+      await _firestore.collection('UserPresence').doc(email).set({
+        'email': email,
+        'lastSeen': FieldValue.serverTimestamp(),
+        'isOnline': true,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      print('Error updating user presence: $e');
+    }
+  }
+
+  // Set user offline (call when user closes app or goes to background)
+  static Future<void> setUserOffline(String email) async {
+    try {
+      await _firestore.collection('UserPresence').doc(email).update({
+        'isOnline': false,
+        'lastSeen': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error setting user offline: $e');
+    }
+  }
+
+  // Get user presence stream for real-time updates
+  static Stream<DocumentSnapshot> getUserPresenceStream(String email) {
+    return _firestore.collection('UserPresence').doc(email).snapshots();
+  }
+
+  // Get user online status and last seen
+  static Future<Map<String, dynamic>> getUserPresence(String email) async {
+    try {
+      final doc = await _firestore.collection('UserPresence').doc(email).get();
+      if (doc.exists) {
+        final data = doc.data()!;
+        final isOnline = data['isOnline'] ?? false;
+        final lastSeen = data['lastSeen'] as Timestamp?;
+        
+        return {
+          'isOnline': isOnline,
+          'lastSeen': lastSeen,
+        };
+      }
+      return {
+        'isOnline': false,
+        'lastSeen': null,
+      };
+    } catch (e) {
+      print('Error getting user presence: $e');
+      return {
+        'isOnline': false,
+        'lastSeen': null,
+      };
+    }
+  }
+
+  // Format last seen time for display
+  static String formatLastSeen(Timestamp? lastSeen) {
+    if (lastSeen == null) return 'Last seen: Unknown';
+    
+    final now = DateTime.now();
+    final lastSeenDate = lastSeen.toDate();
+    final difference = now.difference(lastSeenDate);
+    
+    if (difference.inMinutes < 1) {
+      return 'Last seen: Just now';
+    } else if (difference.inMinutes < 60) {
+      return 'Last seen: ${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return 'Last seen: ${difference.inHours}h ago';
+    } else if (difference.inDays == 1) {
+      return 'Last seen: Yesterday';
+    } else if (difference.inDays < 7) {
+      return 'Last seen: ${difference.inDays}d ago';
+    } else {
+      // Format as date if more than a week
+      return 'Last seen: ${lastSeenDate.day}/${lastSeenDate.month}/${lastSeenDate.year}';
+    }
+  }
+
+  // Get user's mobile number by email
+  static Future<String?> getUserMobileNumber(String email) async {
+    try {
+      // First check if user is a tenant
+      final tenantDoc = await _firestore.collection('Tenants').doc(email).get();
+      if (tenantDoc.exists) {
+        final data = tenantDoc.data()!;
+        return data['mobileNumber'] as String?;
+      }
+
+      // Check if user is an owner
+      final ownerDoc = await _firestore.collection('Owners').doc(email).get();
+      if (ownerDoc.exists) {
+        final data = ownerDoc.data()!;
+        return data['mobileNumber'] as String?;
+      }
+
+      return null;
+    } catch (e) {
+      print('Error getting user mobile number: $e');
+      return null;
+    }
+  }
 }

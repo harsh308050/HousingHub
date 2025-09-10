@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/config/AppConfig.dart';
 
@@ -22,7 +23,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final TextEditingController _msgCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
   bool _sending = false;
@@ -35,7 +36,9 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadOtherUserProfile();
+    _updateCurrentUserPresence();
     // Mark as read on open
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Api.markChatAsRead(
@@ -62,8 +65,94 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  // Update current user's presence
+  Future<void> _updateCurrentUserPresence() async {
+    await Api.updateUserPresence(widget.currentEmail);
+  }
+
+  // Make phone call to the other user
+  Future<void> _makePhoneCall() async {
+    try {
+      final mobileNumber = await Api.getUserMobileNumber(widget.otherEmail);
+
+      if (mobileNumber == null || mobileNumber.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Phone number not available for this user'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Format phone number for calling (remove any spaces, dashes, etc.)
+      final cleanNumber = mobileNumber.replaceAll(RegExp(r'[^\d+]'), '');
+
+      // Use tel: scheme which opens the dialer with the number pre-filled
+      final phoneUri = Uri(scheme: 'tel', path: cleanNumber);
+
+      print('Attempting to launch: $phoneUri'); // Debug log
+
+      if (await canLaunchUrl(phoneUri)) {
+        await launchUrl(
+          phoneUri,
+          mode: LaunchMode.externalApplication,
+        );
+      } else {
+        // Fallback: try with different approach
+        final dialUri = Uri.parse('tel:$cleanNumber');
+        if (await canLaunchUrl(dialUri)) {
+          await launchUrl(dialUri);
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                    'No phone app available to make calls\nNumber: $cleanNumber'),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 4),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      print('Phone call error: $e'); // Debug log
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Handle app lifecycle changes
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _updateCurrentUserPresence();
+        break;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        Api.setUserOffline(widget.currentEmail);
+        break;
+      case AppLifecycleState.hidden:
+        break;
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    Api.setUserOffline(widget.currentEmail);
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -204,32 +293,88 @@ class _ChatScreenState extends State<ChatScreen> {
                         color: Colors.black,
                       ),
                     ),
-                    Text(
-                      'Online',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.green,
-                      ),
+                    StreamBuilder<DocumentSnapshot>(
+                      stream: Api.getUserPresenceStream(widget.otherEmail),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData || !snapshot.data!.exists) {
+                          return Text(
+                            'Last seen: Unknown',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          );
+                        }
+
+                        final data =
+                            snapshot.data!.data() as Map<String, dynamic>;
+                        final isOnline = data['isOnline'] ?? false;
+                        final lastSeen = data['lastSeen'] as Timestamp?;
+
+                        if (isOnline) {
+                          return Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: Colors.green,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'Online',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.green,
+                                ),
+                              ),
+                            ],
+                          );
+                        } else {
+                          // Check if user has been offline for more than 24 hours
+                          if (lastSeen != null) {
+                            return Text(
+                              Api.formatLastSeen(lastSeen),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            );
+                          } else {
+                            return Text(
+                              'Last seen: Unknown',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            );
+                          }
+                        }
+                      },
                     ),
                   ],
                 ),
               ),
               GestureDetector(
-                onTap: () {
-                  // Show options menu
-                },
+                onTap: _makePhoneCall,
                 child: Container(
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Colors.green.shade50,
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.green.shade200,
+                      width: 1,
+                    ),
                   ),
                   child: Center(
                     child: Icon(
-                      Icons.more_vert,
+                      Icons.phone,
                       size: 20,
-                      color: Colors.black,
+                      color: Colors.green.shade600,
                     ),
                   ),
                 ),

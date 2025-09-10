@@ -36,6 +36,9 @@ class _SplashscreenState extends State<Splashscreen> {
           String email = currentUser.email ?? '';
 
           if (email.isNotEmpty) {
+            // Set user presence as online for auto-login
+            Api.updateUserPresence(email);
+            
             String userType = await Api.getUserType(email);
 
             if (userType == 'owner') {

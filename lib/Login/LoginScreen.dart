@@ -922,6 +922,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // Method to handle successful login/authentication
   void _navigateToHomeScreen() {
+    // Set user presence as online
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser?.email != null) {
+      Api.updateUserPresence(currentUser!.email!);
+    }
+    
     // Clear input fields after successful login
     _clearInputFields();
 
