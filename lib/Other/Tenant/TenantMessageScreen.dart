@@ -3,8 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/Other/Chat/ChatScreen.dart';
-import 'package:housinghub/config/AppConfig.dart';
-import 'dart:math' as math;
 
 class TenantMessagesTab extends StatefulWidget {
   const TenantMessagesTab({super.key});
@@ -16,11 +14,25 @@ class TenantMessagesTab extends StatefulWidget {
 class _TenantMessagesTabState extends State<TenantMessagesTab> {
   final TextEditingController _searchController = TextEditingController();
   String _filter = '';
+  
+  // Cache for user profile information
+  final Map<String, Map<String, String>> _userProfileCache = {};
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  // Get or cache user profile information
+  Future<Map<String, String>> _getUserProfile(String email) async {
+    if (_userProfileCache.containsKey(email)) {
+      return _userProfileCache[email]!;
+    }
+    
+    final profile = await Api.getUserProfileInfo(email);
+    _userProfileCache[email] = profile;
+    return profile;
   }
 
   @override
@@ -36,9 +48,8 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(),
+            Center(child: _buildHeader()),
             _buildSearchBar(),
             Expanded(
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -61,12 +72,13 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
                     final bMs = bt is Timestamp ? bt.millisecondsSinceEpoch : 0;
                     return bMs.compareTo(aMs);
                   });
-                  
+
                   // Filter conversations if search text is entered
                   final meNorm = me.trim().toLowerCase();
                   final filtered = docs.where((doc) {
                     final data = doc.data();
-                    final participants = ((data['participants'] ?? []) as List).cast<String>();
+                    final participants =
+                        ((data['participants'] ?? []) as List).cast<String>();
                     final other = participants.firstWhere(
                       (p) => p != meNorm,
                       orElse: () => 'unknown',
@@ -76,23 +88,18 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
                     return other.contains(_filter.toLowerCase()) ||
                         last.toLowerCase().contains(_filter.toLowerCase());
                   }).toList();
-                  
+
                   if (filtered.isEmpty) {
                     return _buildEmptyState();
                   }
 
-                  return ListView.separated(
+                  return ListView.builder(
                     itemCount: filtered.length,
-                    padding: const EdgeInsets.only(top: 8),
-                    separatorBuilder: (context, index) => Divider(
-                      height: 1,
-                      indent: 72,
-                      endIndent: 16,
-                      color: Colors.grey[200],
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemBuilder: (c, i) {
                       final d = filtered[i].data();
-                      final participants = ((d['participants'] ?? []) as List).cast<String>();
+                      final participants =
+                          ((d['participants'] ?? []) as List).cast<String>();
                       final other = participants.firstWhere(
                         (p) => p != meNorm,
                         orElse: () => 'unknown',
@@ -105,23 +112,48 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
                       final timeAgo = timestamp != null
                           ? _getTimeAgo(timestamp.toDate())
                           : '';
-                      
-                      return _buildConversationItem(
-                        name: other,
-                        lastMessage: last.isEmpty ? 'Attachment' : last,
-                        timeAgo: timeAgo,
-                        unread: unread > 0,
-                        avatarColor: _getAvatarColor(other),
-                        hasAttachment: last.isEmpty,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ChatScreen(
-                                currentEmail: me,
-                                otherEmail: other,
-                              ),
-                            ),
+
+                      // Use FutureBuilder to load profile information
+                      return FutureBuilder<Map<String, String>>(
+                        future: _getUserProfile(other),
+                        builder: (context, profileSnapshot) {
+                          String displayName = 'Loading...';
+                          String profilePicture = '';
+                          String avatarText = '?';
+
+                          if (profileSnapshot.connectionState == ConnectionState.done && profileSnapshot.hasData) {
+                            final profile = profileSnapshot.data!;
+                            displayName = profile['displayName'] ?? _formatDisplayName(other);
+                            profilePicture = profile['profilePicture'] ?? '';
+                            avatarText = Api.getUserInitials(displayName, other);
+                          } else if (profileSnapshot.connectionState == ConnectionState.waiting) {
+                            // Show loading state with email-based fallback
+                            displayName = _formatDisplayName(other);
+                            avatarText = _getInitials(other);
+                          } else {
+                            // Error state - fallback to email-based display
+                            displayName = _formatDisplayName(other);
+                            avatarText = _getInitials(other);
+                          }
+
+                          return _buildConversationItem(
+                            name: displayName,
+                            lastMessage: last.isEmpty ? 'Attachment' : last,
+                            timeAgo: timeAgo,
+                            unread: unread > 0,
+                            avatarText: avatarText,
+                            profilePicture: profilePicture,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ChatScreen(
+                                    currentEmail: me,
+                                    otherEmail: other,
+                                  ),
+                                ),
+                              );
+                            },
                           );
                         },
                       );
@@ -135,40 +167,22 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
       ),
     );
   }
-  
-  // Custom back button SVG
-  Widget _buildBackButton() {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Center(
-        child: Icon(
-          Icons.arrow_back_ios_new,
-          size: 18,
-          color: Colors.black,
-        ),
-      ),
-    );
-  }
 
-  // Header with "Messages" title
+  // Custom back button
+
+  // Header with back button and "Messages" title
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Row(
         children: [
-          _buildBackButton(),
           const SizedBox(width: 16),
           const Text(
+            textAlign: TextAlign.center,
             'Messages',
             style: TextStyle(
               fontSize: 24,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
               color: Colors.black,
             ),
           ),
@@ -181,49 +195,27 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search conversations',
-                  border: InputBorder.none,
-                  prefixIcon: Icon(Icons.search, color: Colors.grey[400], size: 20),
-                  hintStyle: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey[400],
-                  ),
-                  contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                ),
-                style: TextStyle(fontSize: 16),
-                onChanged: (v) => setState(() => _filter = v),
-              ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: 'Search conversations',
+            border: InputBorder.none,
+            prefixIcon: Icon(Icons.search, color: Colors.grey[400], size: 20),
+            hintStyle: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[400],
             ),
+            contentPadding: EdgeInsets.symmetric(vertical: 16, horizontal: 20),
           ),
-          const SizedBox(width: 8),
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            child: Center(
-              child: Icon(
-                Icons.tune,
-                size: 20,
-                color: Colors.black,
-              ),
-            ),
-          ),
-        ],
+          style: TextStyle(fontSize: 16),
+          onChanged: (v) => setState(() => _filter = v),
+        ),
       ),
     );
   }
@@ -262,115 +254,134 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
     );
   }
 
-  // Individual conversation list item
+  // Individual conversation list item - matches your design exactly
   Widget _buildConversationItem({
     required String name,
     required String lastMessage,
     required String timeAgo,
     required bool unread,
-    required Color avatarColor,
-    required bool hasAttachment,
+    required String avatarText,
+    String profilePicture = '',
     VoidCallback? onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            // Avatar with first letter or status indicator
-            Stack(
-              children: [
-                CircleAvatar(
-                  radius: 24,
-                  backgroundColor: avatarColor,
-                  child: Text(
-                    name.isNotEmpty ? name[0].toUpperCase() : '?',
-                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
+    return Container(
+      margin: EdgeInsets.only(bottom: 16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: EdgeInsets.all(16),
+          child: Row(
+            children: [
+              // Avatar with profile picture or initials
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: profilePicture.isEmpty ? _getAvatarColor(name) : null,
+                  image: profilePicture.isNotEmpty
+                      ? DecorationImage(
+                          image: NetworkImage(profilePicture),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
-                if (unread)
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            SizedBox(width: 16),
-
-            // Message content
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Name and time
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        name,
-                        style: TextStyle(
-                          fontWeight: unread ? FontWeight.bold : FontWeight.w500,
-                          fontSize: 16,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      Text(
-                        timeAgo,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: unread ? AppConfig.primaryColor : Colors.grey[500],
-                          fontWeight: unread ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 4),
-                  // Last message with attachment icon if needed
-                  Row(
-                    children: [
-                      if (hasAttachment)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: Icon(Icons.attach_file, size: 14, color: Colors.grey[600]),
-                        ),
-                      Expanded(
+                child: profilePicture.isEmpty
+                    ? Center(
                         child: Text(
-                          lastMessage,
+                          avatarText,
                           style: TextStyle(
-                            fontSize: 14,
-                            color: unread ? Colors.black87 : Colors.grey[600],
-                            fontWeight: unread ? FontWeight.w500 : FontWeight.normal,
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      )
+                    : null,
               ),
-            ),
-          ],
+              SizedBox(width: 16),
+
+              // Message content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Name and time row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          name,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            color: Colors.black,
+                          ),
+                        ),
+                        Text(
+                          timeAgo,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 4),
+                    // Last message
+                    Text(
+                      lastMessage,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w400,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-  
+
+  // Helper function to get initials from email
+  String _getInitials(String email) {
+    if (email.isEmpty) return '?';
+    final parts = email.split('@')[0].split('.');
+    if (parts.length >= 2) {
+      return '${parts[0][0].toUpperCase()}${parts[1][0].toUpperCase()}';
+    }
+    return email[0].toUpperCase();
+  }
+
+  // Helper function to format display name from email
+  String _formatDisplayName(String email) {
+    if (email.isEmpty) return 'Unknown';
+    final username = email.split('@')[0];
+    final parts = username.split('.');
+    if (parts.length >= 2) {
+      return '${_capitalize(parts[0])} ${_capitalize(parts[1])}';
+    }
+    return _capitalize(username);
+  }
+
+  String _capitalize(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1);
+  }
+
   // Helper function to get time ago string
   String _getTimeAgo(DateTime dateTime) {
     final now = DateTime.now();
     final difference = now.difference(dateTime);
-    
+
     if (difference.inMinutes < 1) {
       return 'Just now';
     } else if (difference.inMinutes < 60) {
@@ -383,7 +394,7 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
       return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
     }
   }
-  
+
   // Helper function to generate consistent avatar colors
   Color _getAvatarColor(String name) {
     final colors = [
@@ -394,7 +405,7 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
       Color(0xFFE67E22), // Orange
       Color(0xFF2ECC71), // Green
     ];
-    
+
     // Use a hash of the name to pick a consistent color
     final hash = name.codeUnits.fold(0, (prev, element) => prev + element);
     return colors[hash % colors.length];

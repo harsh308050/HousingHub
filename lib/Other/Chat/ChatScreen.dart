@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/config/AppConfig.dart';
@@ -27,15 +26,39 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _msgCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
   bool _sending = false;
+  
+  // Profile information
+  String _otherUserDisplayName = '';
+  String _otherUserProfilePicture = '';
+  bool _profileLoaded = false;
 
   @override
   void initState() {
     super.initState();
+    _loadOtherUserProfile();
     // Mark as read on open
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Api.markChatAsRead(
           currentEmail: widget.currentEmail, otherEmail: widget.otherEmail);
     });
+  }
+
+  // Load the other user's profile information
+  Future<void> _loadOtherUserProfile() async {
+    try {
+      final profile = await Api.getUserProfileInfo(widget.otherEmail);
+      setState(() {
+        _otherUserDisplayName = profile['displayName'] ?? _formatDisplayName(widget.otherEmail);
+        _otherUserProfilePicture = profile['profilePicture'] ?? '';
+        _profileLoaded = true;
+      });
+    } catch (e) {
+      setState(() {
+        _otherUserDisplayName = _formatDisplayName(widget.otherEmail);
+        _otherUserProfilePicture = '';
+        _profileLoaded = true;
+      });
+    }
   }
 
   @override
@@ -100,7 +123,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.otherName ?? widget.otherEmail;
+    // Use loaded profile info if available, otherwise fallback to provided name or email-derived name
+    final displayName = _profileLoaded && _otherUserDisplayName.isNotEmpty 
+        ? _otherUserDisplayName 
+        : (widget.otherName ?? _formatDisplayName(widget.otherEmail));
+    
+    final profilePicture = _profileLoaded ? _otherUserProfilePicture : '';
+    
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -120,31 +149,44 @@ class _ChatScreenState extends State<ChatScreen> {
                   height: 40,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200),
                   ),
                   child: Center(
-                    child: SvgPicture.asset(
-                      'assets/icons/back_arrow.svg',
-                      width: 20,
-                      height: 20,
+                    child: Icon(
+                      Icons.arrow_back_ios_new,
+                      size: 16,
+                      color: Colors.black,
                     ),
                   ),
                 ),
               ),
               const SizedBox(width: 16),
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: AppConfig.primaryColor,
-                child: Text(
-                  widget.otherEmail.isNotEmpty
-                      ? widget.otherEmail[0].toUpperCase()
-                      : '?',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold),
+              // Profile picture or avatar
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: profilePicture.isEmpty ? _getAvatarColor(widget.otherEmail) : null,
+                  image: profilePicture.isNotEmpty
+                      ? DecorationImage(
+                          image: NetworkImage(profilePicture),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
+                child: profilePicture.isEmpty
+                    ? Center(
+                        child: Text(
+                          Api.getUserInitials(displayName, widget.otherEmail),
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -152,10 +194,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      displayName,
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
                         color: Colors.black,
                       ),
                     ),
@@ -178,39 +220,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   height: 40,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 4,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.black,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        SizedBox(width: 2),
-                        Container(
-                          width: 4,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.black,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        SizedBox(width: 2),
-                        Container(
-                          width: 4,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.black,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ],
+                    child: Icon(
+                      Icons.more_vert,
+                      size: 20,
+                      color: Colors.black,
                     ),
                   ),
                 ),
@@ -219,7 +235,6 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
       ),
-      // backgroundColor: Colors.white,
       body: Column(
         children: [
           Expanded(
@@ -251,7 +266,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 }
                 return ListView.builder(
                   controller: _scrollCtrl,
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   itemCount: docs.length,
                   itemBuilder: (c, i) {
                     final m = docs[i].data();
@@ -259,7 +274,11 @@ class _ChatScreenState extends State<ChatScreen> {
                         widget.currentEmail.trim().toLowerCase();
                     final text = (m['text'] ?? '') as String;
                     final att = m['attachment'] as String?;
-                    final isRead = m['isRead'] == true;
+                    final timestamp = m['timestamp'] as Timestamp?;
+                    final timeStr = timestamp != null
+                        ? _formatTime(timestamp.toDate())
+                        : '';
+
                     return Align(
                       alignment:
                           isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -268,44 +287,82 @@ class _ChatScreenState extends State<ChatScreen> {
                             maxWidth: MediaQuery.of(context).size.width * .75),
                         child: Container(
                           margin: const EdgeInsets.symmetric(vertical: 4),
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: isMe
-                                ? AppConfig.primaryColor.withOpacity(.1)
-                                : Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color: isMe
-                                    ? AppConfig.primaryColor.withOpacity(.2)
-                                    : Colors.grey.shade200),
-                          ),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                             children: [
+                              // Handle attachment separately without bubble
                               if (att != null && att.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 6.0),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child:
-                                        Image.network(att, fit: BoxFit.cover),
+                                Column(
+                                  crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.network(
+                                        att,
+                                        fit: BoxFit.cover,
+                                        width: MediaQuery.of(context).size.width * 0.6,
+                                        height: 200,
+                                      ),
+                                    ),
+                                    if (timeStr.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4.0),
+                                        child: Text(
+                                          timeStr,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey[500],
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              // Handle text message with bubble (only if there's text and no attachment)
+                              if (text.isNotEmpty && (att == null || att.isEmpty))
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: isMe
+                                        ? AppConfig.primaryColor
+                                        : Colors.grey.shade100,
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: Radius.circular(18),
+                                      topRight: Radius.circular(18),
+                                      bottomLeft: isMe
+                                          ? Radius.circular(18)
+                                          : Radius.circular(4),
+                                      bottomRight: isMe
+                                          ? Radius.circular(4)
+                                          : Radius.circular(18),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        text,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          color: isMe ? Colors.white : Colors.black,
+                                        ),
+                                      ),
+                                      if (timeStr.isNotEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 4.0),
+                                          child: Text(
+                                            timeStr,
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: isMe
+                                                  ? Colors.white.withOpacity(0.7)
+                                                  : Colors.grey[500],
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ),
-                              if (text.isNotEmpty)
-                                Text(text,
-                                    style: const TextStyle(fontSize: 15)),
-                              const SizedBox(height: 4),
-                              if (isMe)
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      isRead ? Icons.done_all : Icons.check,
-                                      size: 14,
-                                      color: AppConfig.primaryColor,
-                                    ),
-                                  ],
-                                )
                             ],
                           ),
                         ),
@@ -316,92 +373,135 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-          SafeArea(
-            top: false,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: Colors.grey.shade200)),
-              ),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: _sending ? null : _pickAndSendAttachment,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: Center(
-                        child: SvgPicture.asset(
-                          'assets/icons/attachment.svg',
-                          width: 20,
-                          height: 20,
-                          colorFilter: ColorFilter.mode(
-                            _sending ? Colors.grey : Colors.black,
-                            BlendMode.srcIn,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: TextField(
-                        controller: _msgCtrl,
-                        textCapitalization: TextCapitalization.sentences,
-                        minLines: 1,
-                        maxLines: 4,
-                        decoration: InputDecoration(
-                          hintText: 'Message...',
-                          hintStyle: TextStyle(color: Colors.grey.shade400),
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onSubmitted: (_) => _send(),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  GestureDetector(
-                    onTap: _sending ? null : _send,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: AppConfig.primaryColor,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: SvgPicture.asset(
-                          'assets/icons/send.svg',
-                          width: 20,
-                          height: 20,
-                          colorFilter: ColorFilter.mode(
-                            Colors.white,
-                            BlendMode.srcIn,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
+          _buildMessageInput(),
         ],
       ),
     );
+  }
+
+  // Message input area matching your design
+  Widget _buildMessageInput() {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Colors.grey.shade100)),
+        ),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: _sending ? null : _pickAndSendAttachment,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Center(
+                  child: Icon(
+                    Icons.attach_file,
+                    size: 20,
+                    color: _sending ? Colors.grey : Colors.black54,
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: TextField(
+                  controller: _msgCtrl,
+                  textCapitalization: TextCapitalization.sentences,
+                  minLines: 1,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    hintText: 'Message...',
+                    hintStyle: TextStyle(color: Colors.grey.shade400),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  onSubmitted: (_) => _send(),
+                ),
+              ),
+            ),
+            SizedBox(width: 12),
+            GestureDetector(
+              onTap: _sending ? null : _send,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppConfig.primaryColor,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Icon(
+                    Icons.send,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Helper functions for UI formatting
+  String _formatDisplayName(String email) {
+    if (email.isEmpty) return 'Unknown';
+    final username = email.split('@')[0];
+    final parts = username.split('.');
+    if (parts.length >= 2) {
+      return '${_capitalize(parts[0])} ${_capitalize(parts[1])}';
+    }
+    return _capitalize(username);
+  }
+
+  String _capitalize(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1);
+  }
+
+  Color _getAvatarColor(String email) {
+    final colors = [
+      Color(0xFF6366F1), // Indigo
+      Color(0xFF8B5CF6), // Violet
+      Color(0xFF06B6D4), // Cyan
+      Color(0xFF10B981), // Emerald
+      Color(0xFFF59E0B), // Amber
+      Color(0xFFEF4444), // Red
+    ];
+
+    final hash = email.codeUnits.fold(0, (prev, element) => prev + element);
+    return colors[hash % colors.length];
+  }
+
+  String _formatTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDay = DateTime(dateTime.year, dateTime.month, dateTime.day);
+
+    if (messageDay == today) {
+      final hour = dateTime.hour;
+      final minute = dateTime.minute.toString().padLeft(2, '0');
+      final amPm = hour >= 12 ? 'PM' : 'AM';
+      final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+      return '$displayHour:$minute $amPm';
+    } else {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    }
   }
 }

@@ -2295,13 +2295,14 @@ class Api {
     final roomId = chatRoomIdFor(me, other);
     final room = _roomRef(roomId);
 
-    // Mark messages as read (batched in chunks)
+    // Simplified query to avoid composite index requirement
+    // Remove orderBy and just filter by receiverId and isRead
     const int limit = 300;
     Query<Map<String, dynamic>> q = _chatsCol(roomId)
         .where('receiverId', isEqualTo: me)
         .where('isRead', isEqualTo: false)
-        .orderBy('timestamp', descending: false)
         .limit(limit);
+
     final snap = await q.get();
     final batch = _firestore.batch();
     for (final d in snap.docs) {
@@ -2382,5 +2383,130 @@ class Api {
         .orderBy('viewedAt', descending: true)
         .limit(limit)
         .snapshots();
+  }
+
+  // Get user profile information (name and profile picture) by email
+  // This function checks both Tenant and Owner collections
+  static Future<Map<String, String>> getUserProfileInfo(String email) async {
+    if (email.isEmpty) {
+      return {
+        'displayName': 'Unknown User',
+        'profilePicture': '',
+        'userType': 'unknown'
+      };
+    }
+
+    try {
+      // First check if user is a tenant
+      final tenantDoc = await _firestore.collection('Tenants').doc(email).get();
+      if (tenantDoc.exists) {
+        final data = tenantDoc.data()!;
+        final firstName = data['firstName'] as String? ?? '';
+        final lastName = data['lastName'] as String? ?? '';
+        final profilePicture = data['photoUrl'] as String? ?? '';
+        
+        String displayName = '';
+        if (firstName.isNotEmpty && lastName.isNotEmpty) {
+          displayName = '$firstName $lastName';
+        } else if (firstName.isNotEmpty) {
+          displayName = firstName;
+        } else {
+          // Fallback to email-based name
+          displayName = _formatDisplayNameFromEmail(email);
+        }
+
+        return {
+          'displayName': displayName,
+          'profilePicture': profilePicture,
+          'userType': 'tenant'
+        };
+      }
+
+      // Check if user is an owner
+      final ownerDoc = await _firestore.collection('Owners').doc(email).get();
+      if (ownerDoc.exists) {
+        final data = ownerDoc.data()!;
+        final fullName = data['fullName'] as String? ?? '';
+        final profilePicture = data['profilePicture'] as String? ?? ''; // Add support for owner profile picture
+        
+        String displayName = '';
+        if (fullName.isNotEmpty) {
+          displayName = fullName;
+        } else {
+          // Fallback to email-based name
+          displayName = _formatDisplayNameFromEmail(email);
+        }
+
+        return {
+          'displayName': displayName,
+          'profilePicture': profilePicture,
+          'userType': 'owner'
+        };
+      }
+
+      // If not found in either collection, return email-based fallback
+      return {
+        'displayName': _formatDisplayNameFromEmail(email),
+        'profilePicture': '',
+        'userType': 'unknown'
+      };
+    } catch (e) {
+      print('Error fetching user profile info: $e');
+      return {
+        'displayName': _formatDisplayNameFromEmail(email),
+        'profilePicture': '',
+        'userType': 'unknown'
+      };
+    }
+  }
+
+  // Helper function to format display name from email (fallback)
+  static String _formatDisplayNameFromEmail(String email) {
+    if (email.isEmpty) return 'Unknown User';
+    final username = email.split('@')[0];
+    final parts = username.split('.');
+    if (parts.length >= 2) {
+      return '${_capitalize(parts[0])} ${_capitalize(parts[1])}';
+    }
+    return _capitalize(username);
+  }
+
+  // Helper function to capitalize first letter
+  static String _capitalize(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1);
+  }
+
+  // Get user initials for avatar (from actual name or email fallback)
+  static String getUserInitials(String displayName, String email) {
+    if (displayName.isNotEmpty && displayName != 'Unknown User') {
+      final parts = displayName.trim().split(' ');
+      if (parts.length >= 2) {
+        return '${parts[0][0].toUpperCase()}${parts[1][0].toUpperCase()}';
+      } else if (parts.isNotEmpty) {
+        return parts[0][0].toUpperCase();
+      }
+    }
+    
+    // Fallback to email-based initials
+    if (email.isEmpty) return '?';
+    final parts = email.split('@')[0].split('.');
+    if (parts.length >= 2) {
+      return '${parts[0][0].toUpperCase()}${parts[1][0].toUpperCase()}';
+    }
+    return email[0].toUpperCase();
+  }
+
+  // Add profile picture support for owners
+  static Future<void> updateOwnerProfilePicture(String email, String profilePictureUrl) async {
+    try {
+      await _firestore.collection('Owners').doc(email).update({
+        'profilePicture': profilePictureUrl,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error updating owner profile picture: $e');
+      rethrow;
+    }
   }
 }

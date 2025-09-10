@@ -245,17 +245,30 @@ class _HomeTabState extends State<HomeTab> {
                             width: width * 0.12,
                             height: width * 0.12,
                             decoration: BoxDecoration(
-                              color: AppConfig.primaryVariant,
+                              color: (widget.ownerData?['profilePicture'] != null && 
+                                     widget.ownerData!['profilePicture'].toString().isNotEmpty)
+                                  ? null 
+                                  : AppConfig.primaryVariant,
                               borderRadius: BorderRadius.circular(width),
+                              image: (widget.ownerData?['profilePicture'] != null && 
+                                     widget.ownerData!['profilePicture'].toString().isNotEmpty)
+                                  ? DecorationImage(
+                                      image: NetworkImage(widget.ownerData!['profilePicture']),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
                             ),
-                            child: Text(
-                              initials,
-                              style: TextStyle(
-                                fontSize: 22.0,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
+                            child: (widget.ownerData?['profilePicture'] == null || 
+                                   widget.ownerData!['profilePicture'].toString().isEmpty)
+                                ? Text(
+                                    initials,
+                                    style: TextStyle(
+                                      fontSize: 22.0,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : null,
                           ),
                         ),
                         SizedBox(width: width * 0.02),

@@ -4,6 +4,8 @@ import 'package:housinghub/Helper/API.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Other/Owner/EditOwnerProfile.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 class OwnerProfileTab extends StatefulWidget {
   final User? user;
@@ -18,6 +20,8 @@ class OwnerProfileTab extends StatefulWidget {
 class _OwnerProfileTabState extends State<OwnerProfileTab> {
   Map<String, dynamic>? _ownerData;
   bool _isLoading = false;
+  bool _uploadingPhoto = false;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -52,6 +56,42 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  // Upload profile picture
+  Future<void> _pickAndUploadProfilePhoto() async {
+    try {
+      final picked = await _picker.pickImage(source: ImageSource.gallery);
+      if (picked == null) return;
+
+      setState(() => _uploadingPhoto = true);
+
+      final file = File(picked.path);
+      final url = await Api.uploadImageToCloudinary(file, 'owner_profiles');
+
+      // Update owner profile with new picture
+      if (widget.user?.email != null) {
+        await Api.updateOwnerProfilePicture(widget.user!.email!, url);
+
+        // Refresh owner data to show new picture
+        await _fetchOwnerData();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Profile photo updated successfully!')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update photo: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
     }
   }
 
@@ -115,23 +155,93 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
                       Column(
                         spacing: 5,
                         children: [
-                          Container(
-                            height: width * 0.3,
-                            width: width * 0.3,
-                            margin: EdgeInsets.only(top: height * 0.03),
-                            alignment: Alignment.center,
-                            padding: EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: AppConfig.primaryColor,
-                              borderRadius: BorderRadius.circular(width),
-                            ),
-                            child: Text(
-                              initials,
-                              style: TextStyle(
-                                fontSize: height * 0.05,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
+                          GestureDetector(
+                            onTap: _uploadingPhoto
+                                ? null
+                                : _pickAndUploadProfilePhoto,
+                            child: Stack(
+                              children: [
+                                Container(
+                                  height: width * 0.3,
+                                  width: width * 0.3,
+                                  margin: EdgeInsets.only(top: height * 0.03),
+                                  alignment: Alignment.center,
+                                  padding: EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        _ownerData!['profilePicture'] != null &&
+                                                _ownerData!['profilePicture']
+                                                    .toString()
+                                                    .isNotEmpty
+                                            ? null
+                                            : AppConfig.primaryColor,
+                                    borderRadius: BorderRadius.circular(width),
+                                    image: _ownerData!['profilePicture'] !=
+                                                null &&
+                                            _ownerData!['profilePicture']
+                                                .toString()
+                                                .isNotEmpty
+                                        ? DecorationImage(
+                                            image: NetworkImage(
+                                                _ownerData!['profilePicture']),
+                                            fit: BoxFit.cover,
+                                          )
+                                        : null,
+                                  ),
+                                  child:
+                                      _ownerData!['profilePicture'] == null ||
+                                              _ownerData!['profilePicture']
+                                                  .toString()
+                                                  .isEmpty
+                                          ? Text(
+                                              initials,
+                                              style: TextStyle(
+                                                fontSize: height * 0.05,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : null,
+                                ),
+                                // Upload indicator
+                                if (_uploadingPhoto)
+                                  Positioned.fill(
+                                    child: Container(
+                                      margin:
+                                          EdgeInsets.only(top: height * 0.03),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        borderRadius:
+                                            BorderRadius.circular(width),
+                                      ),
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                // Camera icon overlay
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: AppConfig.primaryColor,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                          color: Colors.white, width: 3),
+                                    ),
+                                    child: Icon(
+                                      Icons.camera_alt,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           SizedBox(height: 10),
@@ -210,6 +320,7 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
                               }
                             },
                             style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
                               fixedSize: Size(width, height * 0.07),
                               padding:
                                   EdgeInsets.symmetric(vertical: height * 0.02),
@@ -271,7 +382,7 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
                                           'Notifications',
                                           style: TextStyle(
                                               fontWeight: FontWeight.w800,
-                                              fontSize: 18,
+                                              fontSize: 16,
                                               color: Colors.black54),
                                         ),
                                       ],
@@ -326,7 +437,7 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
                                           'Privacy',
                                           style: TextStyle(
                                               fontWeight: FontWeight.w800,
-                                              fontSize: 18,
+                                              fontSize: 16,
                                               color: Colors.black54),
                                         ),
                                       ],
@@ -381,7 +492,7 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
                                           'Help & Support',
                                           style: TextStyle(
                                               fontWeight: FontWeight.w800,
-                                              fontSize: 18,
+                                              fontSize: 16,
                                               color: Colors.black54),
                                         ),
                                       ],
@@ -436,7 +547,7 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
                                           'About',
                                           style: TextStyle(
                                               fontWeight: FontWeight.w800,
-                                              fontSize: 18,
+                                              fontSize: 16,
                                               color: Colors.black54),
                                         ),
                                       ],

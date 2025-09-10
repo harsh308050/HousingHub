@@ -50,8 +50,9 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
   // List to store property amenities
   List<Map<String, dynamic>> amenitiesList = [];
 
-  // Fetched owner display name (from Owners collection)
+  // Fetched owner display name and profile picture (from Owners collection)
   String ownerName = '';
+  String ownerProfilePicture = '';
 
   // Map controller and markers
   final Completer<GoogleMapController> _mapController = Completer();
@@ -172,7 +173,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
       }
     }
 
-    // Fetch owner display name from Owners collection using ownerEmail
+    // Fetch owner display name and profile picture from Owners collection using ownerEmail
     final ownerEmail = widget.propertyData?['ownerEmail'] as String?;
     if (ownerEmail != null && ownerEmail.isNotEmpty) {
       Api.getOwnerDetailsByEmail(ownerEmail).then((ownerData) {
@@ -181,6 +182,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
             ownerName = ownerData['fullName'] ??
                 ownerData['firstName'] ??
                 ownerEmail.split('@')[0];
+            ownerProfilePicture = ownerData['profilePicture'] ?? '';
           });
         }
       }).catchError((e) {
@@ -198,6 +200,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
           setState(() {
             ownerName =
                 userData['fullName'] ?? userData['firstName'] ?? ownerId;
+            ownerProfilePicture = userData['profilePicture'] ?? '';
           });
         }
       }).catchError((e) {
@@ -623,11 +626,16 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                   CircleAvatar(
                     radius: 24,
                     backgroundColor: Colors.grey[300],
-                    child: Icon(
-                      Icons.person,
-                      color: Colors.grey[700],
-                      size: 32,
-                    ),
+                    backgroundImage: ownerProfilePicture.isNotEmpty 
+                        ? NetworkImage(ownerProfilePicture)
+                        : null,
+                    child: ownerProfilePicture.isEmpty 
+                        ? Icon(
+                            Icons.person,
+                            color: Colors.grey[700],
+                            size: 32,
+                          )
+                        : null,
                   ),
                   SizedBox(width: 12),
                   Expanded(

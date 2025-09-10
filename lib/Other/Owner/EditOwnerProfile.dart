@@ -5,6 +5,8 @@ import 'package:housinghub/Helper/Models.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 class EditOwnerProfile extends StatefulWidget {
   final Map<String, dynamic>? ownerData;
@@ -30,6 +32,11 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
 
   // Loading state
   bool _isLoading = false;
+  bool _uploadingPhoto = false;
+
+  // Profile picture
+  String? _currentProfilePicture;
+  final ImagePicker _picker = ImagePicker();
 
   // For dropdown functionality
   List<String> _states = [];
@@ -56,6 +63,7 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
       _mobileController.text = widget.ownerData!['mobileNumber'] ?? '';
       _fullNameController.text = widget.ownerData!['fullName'] ?? '';
       _emailController.text = widget.ownerData!['email'] ?? '';
+      _currentProfilePicture = widget.ownerData!['profilePicture'];
 
       // Set initial state and city values
       selectedState = widget.ownerData!['state'];
@@ -93,6 +101,38 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
       _filteredCities =
           _cities.where((city) => city.toLowerCase().contains(query)).toList();
     });
+  }
+
+  // Upload profile picture
+  Future<void> _pickAndUploadProfilePhoto() async {
+    try {
+      final picked = await _picker.pickImage(source: ImageSource.gallery);
+      if (picked == null) return;
+
+      setState(() => _uploadingPhoto = true);
+
+      final file = File(picked.path);
+      final url = await Api.uploadImageToCloudinary(file, 'owner_profiles');
+
+      setState(() {
+        _currentProfilePicture = url;
+        _uploadingPhoto = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Profile photo updated! Save to confirm changes.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _uploadingPhoto = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update photo: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -590,6 +630,12 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
           'state': selectedState,
         };
 
+        // Add profile picture if it exists
+        if (_currentProfilePicture != null &&
+            _currentProfilePicture!.isNotEmpty) {
+          updatedData['profilePicture'] = _currentProfilePicture;
+        }
+
         // Update profile in Firestore
         await Api.updateOwnerProfile(_emailController.text, updatedData);
 
@@ -653,24 +699,90 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Header section
+
+                  // Profile Picture section
                   Container(
                     margin: EdgeInsets.only(bottom: 24),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Update Your Details',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                        Center(
+                          child: GestureDetector(
+                            onTap: _uploadingPhoto
+                                ? null
+                                : _pickAndUploadProfilePhoto,
+                            child: Stack(
+                              children: [
+                                Container(
+                                  height: 120,
+                                  width: 120,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _currentProfilePicture == null ||
+                                            _currentProfilePicture!.isEmpty
+                                        ? AppConfig.primaryColor
+                                        : null,
+                                    image: _currentProfilePicture != null &&
+                                            _currentProfilePicture!.isNotEmpty
+                                        ? DecorationImage(
+                                            image: NetworkImage(
+                                                _currentProfilePicture!),
+                                            fit: BoxFit.cover,
+                                          )
+                                        : null,
+                                  ),
+                                  child: _currentProfilePicture == null ||
+                                          _currentProfilePicture!.isEmpty
+                                      ? Icon(
+                                          Icons.person,
+                                          size: 60,
+                                          color: Colors.white,
+                                        )
+                                      : null,
+                                ),
+                                // Upload indicator
+                                if (_uploadingPhoto)
+                                  Positioned.fill(
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                // Camera icon overlay
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: AppConfig.primaryColor,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                          color: Colors.white, width: 2),
+                                    ),
+                                    child: Icon(
+                                      Icons.camera_alt,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         SizedBox(height: 8),
                         Text(
-                          'Edit your personal information',
+                          'Tap to change profile picture',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             color: Colors.grey[600],
                           ),
                         ),
