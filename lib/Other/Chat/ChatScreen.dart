@@ -26,7 +26,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _msgCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
   bool _sending = false;
-  
+
   // Profile information
   String _otherUserDisplayName = '';
   String _otherUserProfilePicture = '';
@@ -48,7 +48,8 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final profile = await Api.getUserProfileInfo(widget.otherEmail);
       setState(() {
-        _otherUserDisplayName = profile['displayName'] ?? _formatDisplayName(widget.otherEmail);
+        _otherUserDisplayName =
+            profile['displayName'] ?? _formatDisplayName(widget.otherEmail);
         _otherUserProfilePicture = profile['profilePicture'] ?? '';
         _profileLoaded = true;
       });
@@ -124,12 +125,12 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     // Use loaded profile info if available, otherwise fallback to provided name or email-derived name
-    final displayName = _profileLoaded && _otherUserDisplayName.isNotEmpty 
-        ? _otherUserDisplayName 
+    final displayName = _profileLoaded && _otherUserDisplayName.isNotEmpty
+        ? _otherUserDisplayName
         : (widget.otherName ?? _formatDisplayName(widget.otherEmail));
-    
+
     final profilePicture = _profileLoaded ? _otherUserProfilePicture : '';
-    
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -168,7 +169,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 height: 40,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: profilePicture.isEmpty ? _getAvatarColor(widget.otherEmail) : null,
+                  color: profilePicture.isEmpty
+                      ? _getAvatarColor(widget.otherEmail)
+                      : null,
                   image: profilePicture.isNotEmpty
                       ? DecorationImage(
                           image: NetworkImage(profilePicture),
@@ -288,25 +291,32 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: Container(
                           margin: const EdgeInsets.symmetric(vertical: 4),
                           child: Column(
-                            crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                            crossAxisAlignment: isMe
+                                ? CrossAxisAlignment.end
+                                : CrossAxisAlignment.start,
                             children: [
                               // Handle attachment separately without bubble
                               if (att != null && att.isNotEmpty)
                                 Column(
-                                  crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                  crossAxisAlignment: isMe
+                                      ? CrossAxisAlignment.end
+                                      : CrossAxisAlignment.start,
                                   children: [
                                     ClipRRect(
                                       borderRadius: BorderRadius.circular(12),
                                       child: Image.network(
                                         att,
                                         fit: BoxFit.cover,
-                                        width: MediaQuery.of(context).size.width * 0.6,
+                                        width:
+                                            MediaQuery.of(context).size.width *
+                                                0.6,
                                         height: 200,
                                       ),
                                     ),
                                     if (timeStr.isNotEmpty)
                                       Padding(
-                                        padding: const EdgeInsets.only(top: 4.0),
+                                        padding:
+                                            const EdgeInsets.only(top: 4.0),
                                         child: Text(
                                           timeStr,
                                           style: TextStyle(
@@ -318,7 +328,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                   ],
                                 ),
                               // Handle text message with bubble (only if there's text and no attachment)
-                              if (text.isNotEmpty && (att == null || att.isEmpty))
+                              if (text.isNotEmpty &&
+                                  (att == null || att.isEmpty))
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 16, vertical: 12),
@@ -338,24 +349,29 @@ class _ChatScreenState extends State<ChatScreen> {
                                     ),
                                   ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         text,
                                         style: TextStyle(
                                           fontSize: 15,
-                                          color: isMe ? Colors.white : Colors.black,
+                                          color: isMe
+                                              ? Colors.white
+                                              : Colors.black,
                                         ),
                                       ),
                                       if (timeStr.isNotEmpty)
                                         Padding(
-                                          padding: const EdgeInsets.only(top: 4.0),
+                                          padding:
+                                              const EdgeInsets.only(top: 4.0),
                                           child: Text(
                                             timeStr,
                                             style: TextStyle(
                                               fontSize: 11,
                                               color: isMe
-                                                  ? Colors.white.withOpacity(0.7)
+                                                  ? Colors.white
+                                                      .withOpacity(0.7)
                                                   : Colors.grey[500],
                                             ),
                                           ),

@@ -80,16 +80,13 @@ class _SplashscreenState extends State<Splashscreen> {
             children: [
               Container(
                   padding: EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  width: 150,
-                  height: 150,
+                  width: 180,
+                  height: 180,
                   child: Image.asset(
                     AppConfig.logoPath,
                     fit: BoxFit.cover,
                   )),
+              SizedBox(height: 20),
               AnimatedTextKit(animatedTexts: [
                 ColorizeAnimatedText(
                   AppConfig.appName,
@@ -105,7 +102,6 @@ class _SplashscreenState extends State<Splashscreen> {
                   ),
                 ),
               ]),
-              SizedBox(height: 20),
               AnimatedTextKit(animatedTexts: [
                 FadeAnimatedText(
                   'Find Your Perfect Stay',

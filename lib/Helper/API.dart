@@ -2404,7 +2404,7 @@ class Api {
         final firstName = data['firstName'] as String? ?? '';
         final lastName = data['lastName'] as String? ?? '';
         final profilePicture = data['photoUrl'] as String? ?? '';
-        
+
         String displayName = '';
         if (firstName.isNotEmpty && lastName.isNotEmpty) {
           displayName = '$firstName $lastName';
@@ -2427,8 +2427,9 @@ class Api {
       if (ownerDoc.exists) {
         final data = ownerDoc.data()!;
         final fullName = data['fullName'] as String? ?? '';
-        final profilePicture = data['profilePicture'] as String? ?? ''; // Add support for owner profile picture
-        
+        final profilePicture = data['profilePicture'] as String? ??
+            ''; // Add support for owner profile picture
+
         String displayName = '';
         if (fullName.isNotEmpty) {
           displayName = fullName;
@@ -2487,7 +2488,7 @@ class Api {
         return parts[0][0].toUpperCase();
       }
     }
-    
+
     // Fallback to email-based initials
     if (email.isEmpty) return '?';
     final parts = email.split('@')[0].split('.');
@@ -2498,7 +2499,8 @@ class Api {
   }
 
   // Add profile picture support for owners
-  static Future<void> updateOwnerProfilePicture(String email, String profilePictureUrl) async {
+  static Future<void> updateOwnerProfilePicture(
+      String email, String profilePictureUrl) async {
     try {
       await _firestore.collection('Owners').doc(email).update({
         'profilePicture': profilePictureUrl,

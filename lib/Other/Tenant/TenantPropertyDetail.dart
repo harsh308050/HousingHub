@@ -626,10 +626,10 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                   CircleAvatar(
                     radius: 24,
                     backgroundColor: Colors.grey[300],
-                    backgroundImage: ownerProfilePicture.isNotEmpty 
+                    backgroundImage: ownerProfilePicture.isNotEmpty
                         ? NetworkImage(ownerProfilePicture)
                         : null,
-                    child: ownerProfilePicture.isEmpty 
+                    child: ownerProfilePicture.isEmpty
                         ? Icon(
                             Icons.person,
                             color: Colors.grey[700],

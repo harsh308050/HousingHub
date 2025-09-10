@@ -16,7 +16,7 @@ class _OwnerChatTabState extends State<OwnerChatTab> {
   final TextEditingController _searchController = TextEditingController();
 
   String _filter = '';
-  
+
   // Cache for user profile information
   final Map<String, Map<String, String>> _userProfileCache = {};
 
@@ -31,7 +31,7 @@ class _OwnerChatTabState extends State<OwnerChatTab> {
     if (_userProfileCache.containsKey(email)) {
       return _userProfileCache[email]!;
     }
-    
+
     final profile = await Api.getUserProfileInfo(email);
     _userProfileCache[email] = profile;
     return profile;
@@ -120,12 +120,17 @@ class _OwnerChatTabState extends State<OwnerChatTab> {
                           String profilePicture = '';
                           String avatarText = '?';
 
-                          if (profileSnapshot.connectionState == ConnectionState.done && profileSnapshot.hasData) {
+                          if (profileSnapshot.connectionState ==
+                                  ConnectionState.done &&
+                              profileSnapshot.hasData) {
                             final profile = profileSnapshot.data!;
-                            displayName = profile['displayName'] ?? _formatDisplayName(other);
+                            displayName = profile['displayName'] ??
+                                _formatDisplayName(other);
                             profilePicture = profile['profilePicture'] ?? '';
-                            avatarText = Api.getUserInitials(displayName, other);
-                          } else if (profileSnapshot.connectionState == ConnectionState.waiting) {
+                            avatarText =
+                                Api.getUserInitials(displayName, other);
+                          } else if (profileSnapshot.connectionState ==
+                              ConnectionState.waiting) {
                             // Show loading state with email-based fallback
                             displayName = _formatDisplayName(other);
                             avatarText = _getInitials(other);
