@@ -14,7 +14,7 @@ class OwnerHomeScreen extends StatefulWidget {
   State<OwnerHomeScreen> createState() => _OwnerHomeScreenState();
 }
 
-class _OwnerHomeScreenState extends State<OwnerHomeScreen> 
+class _OwnerHomeScreenState extends State<OwnerHomeScreen>
     with WidgetsBindingObserver {
   int _selectedIndex = 0;
   late List<Widget Function(BuildContext)>
@@ -340,10 +340,41 @@ class _HomeTabState extends State<HomeTab> {
                         ),
                       ],
                     ),
-                    Icon(
-                      Icons.notifications_none_outlined,
-                      size: 30,
-                      color: Color(0xFF007AFF),
+                    // Notification icon with unread count
+                    StreamBuilder<int>(
+                      stream: Api.getUnreadNotificationCountStream(
+                          widget.user?.email ?? ''),
+                      builder: (context, snapshot) {
+                        final unreadCount = snapshot.data ?? 0;
+                        return Stack(
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                Icons.notifications_none_outlined,
+                                size: 30,
+                                color: Color(0xFF007AFF),
+                              ),
+                              onPressed: () {
+                                Navigator.pushNamed(
+                                    context, 'NotificationScreen');
+                              },
+                            ),
+                            if (unreadCount > 0)
+                              Positioned(
+                                right: 8,
+                                top: 8,
+                                child: Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),

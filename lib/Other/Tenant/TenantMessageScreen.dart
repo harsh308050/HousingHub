@@ -96,6 +96,8 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
                   return ListView.builder(
                     itemCount: filtered.length,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
+                    physics:
+                        const BouncingScrollPhysics(), // Smooth iOS-like scrolling
                     itemBuilder: (c, i) {
                       final d = filtered[i].data();
                       final participants =
@@ -147,6 +149,7 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
                             timeAgo: timeAgo,
                             unread: unread > 0,
                             avatarText: avatarText,
+                            otherEmail: other,
                             profilePicture: profilePicture,
                             onTap: () {
                               Navigator.push(
@@ -259,13 +262,14 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
     );
   }
 
-  // Individual conversation list item - matches your design exactly
+  // Individual conversation list item with online status and unread indicators
   Widget _buildConversationItem({
     required String name,
     required String lastMessage,
     required String timeAgo,
     required bool unread,
     required String avatarText,
+    required String otherEmail,
     String profilePicture = '',
     VoidCallback? onTap,
   }) {
@@ -278,32 +282,70 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
           padding: EdgeInsets.all(16),
           child: Row(
             children: [
-              // Avatar with profile picture or initials
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: profilePicture.isEmpty ? _getAvatarColor(name) : null,
-                  image: profilePicture.isNotEmpty
-                      ? DecorationImage(
-                          image: NetworkImage(profilePicture),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
-                child: profilePicture.isEmpty
-                    ? Center(
-                        child: Text(
-                          avatarText,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
+              // Avatar with profile picture or initials + online status indicator
+              Stack(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color:
+                          profilePicture.isEmpty ? _getAvatarColor(name) : null,
+                      image: profilePicture.isNotEmpty
+                          ? DecorationImage(
+                              image: NetworkImage(profilePicture),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
+                    ),
+                    child: profilePicture.isEmpty
+                        ? Center(
+                            child: Text(
+                              avatarText,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          )
+                        : null,
+                  ),
+                  // Online status indicator - green dot
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: StreamBuilder<DocumentSnapshot>(
+                      stream: Api.getUserPresenceStream(otherEmail),
+                      builder: (context, snapshot) {
+                        bool isOnline = false;
+                        if (snapshot.hasData && snapshot.data!.exists) {
+                          final data =
+                              snapshot.data!.data() as Map<String, dynamic>;
+                          isOnline = data['isOnline'] ?? false;
+                        }
+
+                        return AnimatedOpacity(
+                          opacity: isOnline ? 1.0 : 0.0,
+                          duration: Duration(milliseconds: 300),
+                          child: Container(
+                            width: 14,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 2,
+                              ),
+                            ),
                           ),
-                        ),
-                      )
-                    : null,
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
               SizedBox(width: 16),
 
@@ -316,21 +358,43 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          name,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                            color: Colors.black,
+                        Expanded(
+                          child: Text(
+                            name,
+                            style: TextStyle(
+                              fontWeight:
+                                  unread ? FontWeight.w700 : FontWeight.w600,
+                              fontSize: 16,
+                              color: Colors.black,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        Text(
-                          timeAgo,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[500],
-                            fontWeight: FontWeight.w400,
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              timeAgo,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: unread ? Colors.blue : Colors.grey[500],
+                                fontWeight:
+                                    unread ? FontWeight.w500 : FontWeight.w400,
+                              ),
+                            ),
+                            // Unread message indicator - blue dot
+                            if (unread) ...[
+                              SizedBox(width: 8),
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: Colors.blue,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ],
                     ),
@@ -340,8 +404,8 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
                       lastMessage,
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.grey[600],
-                        fontWeight: FontWeight.w400,
+                        color: unread ? Colors.black87 : Colors.grey[600],
+                        fontWeight: unread ? FontWeight.w500 : FontWeight.w400,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

@@ -7,6 +7,7 @@ import 'package:housinghub/config/AppConfig.dart';
 import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'Other/Tenant/TenantHomeScreen.dart';
+import 'Other/Notification/NotificationScreen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,6 +48,7 @@ class _MyAppState extends State<MyApp> {
         'LoginScreen': (context) => LoginScreen(),
         'OwnerHomeScreen': (context) => OwnerHomeScreen(),
         'TenantHomeScreen': (context) => TenantHomeScreen(),
+        'NotificationScreen': (context) => NotificationScreen(),
       },
     );
   }

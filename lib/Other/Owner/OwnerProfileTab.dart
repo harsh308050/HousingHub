@@ -116,7 +116,7 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
 
     return Scaffold(
       appBar: PreferredSize(
-        preferredSize: Size(width, height * 0.08),
+        preferredSize: Size(width, height * 0.05),
         child: AppBar(
           title: Container(
             padding: EdgeInsets.all(height * 0.01),
@@ -294,9 +294,9 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
                             },
                             style: ElevatedButton.styleFrom(
                               fixedSize: Size(width, height * 0.07),
-                              backgroundColor: const Color(0xFF0066FF),
-                              padding:
-                                  EdgeInsets.symmetric(vertical: height * 0.02),
+                              backgroundColor: AppConfig.primaryColor,
+                              padding: EdgeInsets.symmetric(
+                                  vertical: height * 0.015),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
@@ -322,11 +322,11 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white,
                               fixedSize: Size(width, height * 0.07),
-                              padding:
-                                  EdgeInsets.symmetric(vertical: height * 0.02),
+                              padding: EdgeInsets.symmetric(
+                                  vertical: height * 0.015),
                               shape: RoundedRectangleBorder(
                                 side: BorderSide(
-                                  color: Color(0xFFFF3B30),
+                                  color: AppConfig.dangerColor,
                                   width: 2.0,
                                 ),
                                 borderRadius: BorderRadius.circular(10),
@@ -335,7 +335,7 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
                             child: Text(
                               'Logout',
                               style: TextStyle(
-                                  fontSize: 18, color: Color(0xFFFF3B30)),
+                                  fontSize: 18, color: AppConfig.dangerColor),
                             ),
                           )
                         ],
@@ -347,7 +347,10 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
                             spacing: height * 0.01,
                             children: [
                               ElevatedButton(
-                                onPressed: () {},
+                                onPressed: () {
+                                  Navigator.pushNamed(
+                                      context, 'NotificationScreen');
+                                },
                                 style: ElevatedButton.styleFrom(
                                   overlayColor: Colors.transparent,
                                   elevation: 0,
@@ -855,15 +858,15 @@ class About extends StatelessWidget {
                   Row(
                     children: [
                       Container(
-                        padding: EdgeInsets.all(10),
+                        // padding: EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: Color(0xFFE6F0FF),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Icon(
-                          Icons.home_outlined,
-                          color: Color(0xFF0066FF),
-                          size: 28,
+                        child: Image.asset(
+                          'assets/images/Logo.png',
+                          width: 40,
+                          height: 40,
                         ),
                       ),
                       SizedBox(width: 16),
@@ -945,7 +948,7 @@ class About extends StatelessWidget {
                   Container(
                     alignment: Alignment.center,
                     padding: EdgeInsets.all(16),
-                    margin: EdgeInsets.symmetric(vertical: 24),
+                    margin: EdgeInsets.only(bottom: 24),
                     decoration: BoxDecoration(
                       color: Color(0xFFE6F0FF),
                       borderRadius: BorderRadius.circular(12),
@@ -1238,12 +1241,11 @@ class _HelpState extends State<Help> {
                     Container(
                       margin: EdgeInsets.only(bottom: 16),
                       width: double.infinity,
-                      child: ElevatedButton.icon(
+                      child: ElevatedButton(
                         onPressed: () {
                           _launchEmail();
                         },
-                        icon: Icon(Icons.email_outlined),
-                        label: Text(
+                        child: Text(
                           "✉️ Email Us",
                           style: TextStyle(fontSize: 16),
                         ),

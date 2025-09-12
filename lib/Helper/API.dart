@@ -2276,6 +2276,22 @@ class Api {
         SetOptions(merge: true),
       );
     });
+
+    // Create notification for the receiver
+    try {
+      final senderProfile = await getUserProfileInfo(senderEmail);
+      final senderName = senderProfile['displayName'] ?? 'Someone';
+
+      await createChatNotification(
+        senderEmail: senderEmail,
+        receiverEmail: receiverEmail,
+        senderName: senderName,
+        messageText: text ?? '',
+      );
+    } catch (e) {
+      print('Error creating notification: $e');
+      // Don't let notification errors break message sending
+    }
   }
 
   static Stream<QuerySnapshot<Map<String, dynamic>>> streamChatMessages(
@@ -2521,6 +2537,8 @@ class Api {
         'email': email,
         'lastSeen': FieldValue.serverTimestamp(),
         'isOnline': true,
+        'isTyping': false, // Always set to false when updating presence
+        'typingFor': null,
       }, SetOptions(merge: true));
     } catch (e) {
       print('Error updating user presence: $e');
@@ -2533,9 +2551,35 @@ class Api {
       await _firestore.collection('UserPresence').doc(email).update({
         'isOnline': false,
         'lastSeen': FieldValue.serverTimestamp(),
+        'isTyping': false,
+        'typingFor': null,
       });
     } catch (e) {
       print('Error setting user offline: $e');
+    }
+  }
+
+  // Set typing status (call when user is typing in a chat)
+  static Future<void> setTypingStatus(String email, String typingFor) async {
+    try {
+      await _firestore.collection('UserPresence').doc(email).set({
+        'isTyping': true,
+        'typingFor': typingFor,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      print('Error setting typing status: $e');
+    }
+  }
+
+  // Clear typing status (call when user stops typing or leaves chat)
+  static Future<void> clearTypingStatus(String email) async {
+    try {
+      await _firestore.collection('UserPresence').doc(email).set({
+        'isTyping': false,
+        'typingFor': null,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      print('Error clearing typing status: $e');
     }
   }
 
@@ -2552,7 +2596,7 @@ class Api {
         final data = doc.data()!;
         final isOnline = data['isOnline'] ?? false;
         final lastSeen = data['lastSeen'] as Timestamp?;
-        
+
         return {
           'isOnline': isOnline,
           'lastSeen': lastSeen,
@@ -2571,14 +2615,80 @@ class Api {
     }
   }
 
+  // Update user's typing status in a specific conversation
+  static Future<void> updateTypingStatus(
+      String currentEmail, String otherEmail, bool isTyping) async {
+    try {
+      final conversationId = chatRoomIdFor(currentEmail, otherEmail);
+      print(
+          '[TYPING] Updating typing status: $currentEmail -> $otherEmail, isTyping: $isTyping, conversationId: $conversationId');
+      
+      final updateData = {
+        'email': currentEmail,
+        'lastSeen': FieldValue.serverTimestamp(),
+        'isOnline': true,
+        'typingIn': isTyping ? conversationId : null,
+        'typingTimestamp': isTyping ? FieldValue.serverTimestamp() : null,
+      };
+      
+      print('[TYPING] Update data: $updateData');
+      
+      await _firestore.collection('UserPresence').doc(currentEmail).set(
+        updateData,
+        SetOptions(merge: true),
+      );
+      print('[TYPING] Typing status updated successfully in Firestore');
+    } catch (e) {
+      print('[TYPING] Error updating typing status: $e');
+      print('[TYPING] Stack trace: ${StackTrace.current}');
+    }
+  }
+
+  // Get typing status stream for a specific conversation
+  static Stream<bool> getTypingStatusStream(
+      String otherEmail, String currentEmail) {
+    final conversationId = chatRoomIdFor(currentEmail, otherEmail);
+    print(
+        '[TYPING] Setting up typing stream for: $otherEmail, conversationId: $conversationId');
+    return _firestore
+        .collection('UserPresence')
+        .doc(otherEmail)
+        .snapshots()
+        .map((doc) {
+      if (!doc.exists) {
+        print('[TYPING] User presence document does not exist for: $otherEmail');
+        return false;
+      }
+      final data = doc.data()!;
+      final typingIn = data['typingIn'] as String?;
+      final typingTimestamp = data['typingTimestamp'] as Timestamp?;
+
+      print(
+          '[TYPING] Received data for $otherEmail: typingIn=$typingIn, typingTimestamp=$typingTimestamp, expectedConversationId=$conversationId');
+
+      // Check if user is typing in this conversation and the typing status is recent (within 3 seconds for ultra-fast response)
+      if (typingIn == conversationId && typingTimestamp != null) {
+        final now = DateTime.now();
+        final typingTime = typingTimestamp.toDate();
+        final differenceMs = now.difference(typingTime).inMilliseconds;
+        final isTyping = differenceMs <= 3000; // 3000ms = 3 seconds for minimal delay while handling network latency
+        print(
+            '[TYPING] User $otherEmail isTyping: $isTyping (difference: ${differenceMs}ms, threshold: 3000ms)');
+        return isTyping; // Consider typing active only if updated within last 3 seconds
+      }
+      print('[TYPING] User $otherEmail not typing in this conversation');
+      return false;
+    });
+  }
+
   // Format last seen time for display
   static String formatLastSeen(Timestamp? lastSeen) {
     if (lastSeen == null) return 'Last seen: Unknown';
-    
+
     final now = DateTime.now();
     final lastSeenDate = lastSeen.toDate();
     final difference = now.difference(lastSeenDate);
-    
+
     if (difference.inMinutes < 1) {
       return 'Last seen: Just now';
     } else if (difference.inMinutes < 60) {
@@ -2616,6 +2726,154 @@ class Api {
     } catch (e) {
       print('Error getting user mobile number: $e');
       return null;
+    }
+  }
+
+  // Notification System Functions
+
+  // Create a notification when someone sends a message
+  static Future<void> createChatNotification({
+    required String senderEmail,
+    required String receiverEmail,
+    required String senderName,
+    required String messageText,
+  }) async {
+    try {
+      // Create notification ID
+      final notificationId =
+          '${senderEmail}_${receiverEmail}_${DateTime.now().millisecondsSinceEpoch}';
+
+      // Determine notification message
+      String notificationTitle;
+      String notificationBody;
+
+      if (messageText.isNotEmpty) {
+        notificationTitle = '$senderName sent a message';
+        notificationBody = messageText.length > 50
+            ? '${messageText.substring(0, 50)}...'
+            : messageText;
+      } else {
+        notificationTitle = '$senderName sent an attachment';
+        notificationBody = 'Photo';
+      }
+
+      await _firestore.collection('Notifications').doc(notificationId).set({
+        'id': notificationId,
+        'senderEmail': senderEmail,
+        'receiverEmail': receiverEmail,
+        'senderName': senderName,
+        'title': notificationTitle,
+        'body': notificationBody,
+        'type': 'chat_message',
+        'isRead': false,
+        'timestamp': FieldValue.serverTimestamp(),
+        'chatId': chatRoomIdFor(senderEmail, receiverEmail),
+      });
+    } catch (e) {
+      print('Error creating chat notification: $e');
+    }
+  }
+
+  // Get notifications for a user
+  static Stream<QuerySnapshot<Map<String, dynamic>>> getNotificationsStream(
+      String userEmail) {
+    return _firestore
+        .collection('Notifications')
+        .where('receiverEmail', isEqualTo: userEmail)
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .handleError((error) {
+      print('Error in notification stream: $error');
+      // If composite index error, fall back to unordered query
+      if (error.toString().contains('FAILED_PRECONDITION') ||
+          error.toString().contains('index')) {
+        return getNotificationsStreamFallback(userEmail);
+      }
+      throw error;
+    });
+  }
+
+  // Get notifications for a user (fallback without ordering)
+  static Stream<QuerySnapshot<Map<String, dynamic>>>
+      getNotificationsStreamFallback(String userEmail) {
+    return _firestore
+        .collection('Notifications')
+        .where('receiverEmail', isEqualTo: userEmail)
+        .snapshots();
+  }
+
+  // Mark notification as read
+  static Future<void> markNotificationAsRead(String notificationId) async {
+    try {
+      await _firestore.collection('Notifications').doc(notificationId).update({
+        'isRead': true,
+      });
+    } catch (e) {
+      print('Error marking notification as read: $e');
+    }
+  }
+
+  // Mark all notifications as read for a user
+  static Future<void> markAllNotificationsAsRead(String userEmail) async {
+    try {
+      final notifications = await _firestore
+          .collection('Notifications')
+          .where('receiverEmail', isEqualTo: userEmail)
+          .where('isRead', isEqualTo: false)
+          .get();
+
+      final batch = _firestore.batch();
+      for (final doc in notifications.docs) {
+        batch.update(doc.reference, {'isRead': true});
+      }
+      await batch.commit();
+    } catch (e) {
+      print('Error marking all notifications as read: $e');
+    }
+  }
+
+  // Get unread notification count
+  static Future<int> getUnreadNotificationCount(String userEmail) async {
+    try {
+      final snapshot = await _firestore
+          .collection('Notifications')
+          .where('receiverEmail', isEqualTo: userEmail)
+          .where('isRead', isEqualTo: false)
+          .get();
+      return snapshot.docs.length;
+    } catch (e) {
+      print('Error getting unread notification count: $e');
+      return 0;
+    }
+  }
+
+  // Get unread notification count stream
+  static Stream<int> getUnreadNotificationCountStream(String userEmail) {
+    return _firestore
+        .collection('Notifications')
+        .where('receiverEmail', isEqualTo: userEmail)
+        .where('isRead', isEqualTo: false)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length);
+  }
+
+  // Delete old notifications (older than 30 days)
+  static Future<void> cleanupOldNotifications(String userEmail) async {
+    try {
+      final thirtyDaysAgo = DateTime.now().subtract(Duration(days: 30));
+      final oldNotifications = await _firestore
+          .collection('Notifications')
+          .where('receiverEmail', isEqualTo: userEmail)
+          .where('timestamp', isLessThan: Timestamp.fromDate(thirtyDaysAgo))
+          .get();
+
+      final batch = _firestore.batch();
+      for (final doc in oldNotifications.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    } catch (e) {
+      print('Error cleaning up old notifications: $e');
     }
   }
 }

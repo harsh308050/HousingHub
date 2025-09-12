@@ -1,4 +1,5 @@
-import 'dart:io';
+﻿import 'dart:io';
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/config/AppConfig.dart';
+import 'package:housinghub/Other/Chat/TypingIndicator.dart';
 
 class ChatScreen extends StatefulWidget {
   final String currentEmail;
@@ -33,12 +35,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   String _otherUserProfilePicture = '';
   bool _profileLoaded = false;
 
+  // Typing indicator variables
+  Timer? _typingTimer;
+  bool _isCurrentUserTyping = false;
+  late Stream<bool> _otherUserTypingStream;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadOtherUserProfile();
     _updateCurrentUserPresence();
+
+    // Initialize typing status stream
+    _otherUserTypingStream =
+        Api.getTypingStatusStream(widget.otherEmail, widget.currentEmail);
+
+    // Set up text controller listener for typing detection
+    _msgCtrl.addListener(_onTextChanged);
+
     // Mark as read on open
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Api.markChatAsRead(
@@ -68,6 +83,49 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // Update current user's presence
   Future<void> _updateCurrentUserPresence() async {
     await Api.updateUserPresence(widget.currentEmail);
+  }
+
+  // Handle text input changes for typing indicator
+  void _onTextChanged() {
+    final text = _msgCtrl.text;
+
+    if (text.isNotEmpty && !_isCurrentUserTyping) {
+      // User started typing - send immediately
+      print('[TYPING] User started typing: ${text.length} characters');
+      _isCurrentUserTyping = true;
+      Api.updateTypingStatus(widget.currentEmail, widget.otherEmail, true);
+    } else if (text.isEmpty && _isCurrentUserTyping) {
+      // User cleared the text field - stop immediately
+      print('[TYPING] User cleared text - stopping typing indicator immediately');
+      _isCurrentUserTyping = false;
+      Api.updateTypingStatus(widget.currentEmail, widget.otherEmail, false);
+    } else if (text.isNotEmpty && _isCurrentUserTyping) {
+      // User is continuing to type - refresh the typing status immediately for real-time updates
+      Api.updateTypingStatus(widget.currentEmail, widget.otherEmail, true);
+    }
+
+    // Reset or set timer for stopping typing status
+    _typingTimer?.cancel();
+    if (text.isNotEmpty) {
+      _typingTimer = Timer(const Duration(milliseconds: 500), () {
+        // User stopped typing after 0.5 seconds of inactivity (ultra-fast for real-time response)
+        if (_isCurrentUserTyping) {
+          print('[TYPING] Typing timeout - clearing status after 0.5s inactivity');
+          _isCurrentUserTyping = false;
+          Api.updateTypingStatus(widget.currentEmail, widget.otherEmail, false);
+        }
+      });
+    }
+  }
+
+  // Clear typing status when user sends message or leaves chat
+  Future<void> _clearTypingStatus() async {
+    _typingTimer?.cancel();
+    if (_isCurrentUserTyping) {
+      _isCurrentUserTyping = false;
+      await Api.updateTypingStatus(
+          widget.currentEmail, widget.otherEmail, false);
+    }
   }
 
   // Make phone call to the other user
@@ -143,6 +201,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       case AppLifecycleState.inactive:
       case AppLifecycleState.detached:
         Api.setUserOffline(widget.currentEmail);
+        _clearTypingStatus(); // Clear typing when app goes to background
         break;
       case AppLifecycleState.hidden:
         break;
@@ -153,6 +212,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     Api.setUserOffline(widget.currentEmail);
+    // Clean up typing status and timer
+    _typingTimer?.cancel();
+    _clearTypingStatus();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -160,8 +222,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<void> _pickAndSendAttachment() async {
     final picker = ImagePicker();
-    final XFile? picked = await picker.pickImage(source: ImageSource.gallery);
+    final XFile? picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80, // Optimize like Lets_Chat
+    );
     if (picked == null) return;
+
     setState(() => _sending = true);
     try {
       final url = await Api.uploadChatAttachment(File(picked.path));
@@ -170,6 +236,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         receiverEmail: widget.otherEmail,
         attachmentUrl: url,
       );
+
+      // Smooth auto-scroll to bottom
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.animateTo(
+          0, // Since we're using reverse: true, 0 is the bottom
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -184,20 +260,28 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _send() async {
     final text = _msgCtrl.text.trim();
     if (text.isEmpty) return;
+
+    // Clear the text field immediately for better UX
+    _msgCtrl.clear();
     setState(() => _sending = true);
+
+    // Clear typing status immediately when sending message
+    await _clearTypingStatus();
+
     try {
       await Api.sendChatMessage(
         senderEmail: widget.currentEmail,
         receiverEmail: widget.otherEmail,
         text: text,
       );
-      _msgCtrl.clear();
-      await Future.delayed(const Duration(milliseconds: 50));
+
+      // Smooth auto-scroll to bottom like Lets_Chat
+      await Future.delayed(const Duration(milliseconds: 100));
       if (_scrollCtrl.hasClients) {
         _scrollCtrl.animateTo(
-          _scrollCtrl.position.maxScrollExtent + 120,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
+          0, // Since we're using reverse: true, 0 is the bottom
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
         );
       }
     } catch (e) {
@@ -252,33 +336,71 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(width: 16),
-              // Profile picture or avatar
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: profilePicture.isEmpty
-                      ? _getAvatarColor(widget.otherEmail)
-                      : null,
-                  image: profilePicture.isNotEmpty
-                      ? DecorationImage(
-                          image: NetworkImage(profilePicture),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
-                child: profilePicture.isEmpty
-                    ? Center(
-                        child: Text(
-                          Api.getUserInitials(displayName, widget.otherEmail),
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600),
-                        ),
-                      )
-                    : null,
+              // Profile picture or avatar with online status indicator
+              Stack(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: profilePicture.isEmpty
+                          ? _getAvatarColor(widget.otherEmail)
+                          : null,
+                      image: profilePicture.isNotEmpty
+                          ? DecorationImage(
+                              image: NetworkImage(profilePicture),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
+                    ),
+                    child: profilePicture.isEmpty
+                        ? Center(
+                            child: Text(
+                              Api.getUserInitials(
+                                  displayName, widget.otherEmail),
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          )
+                        : null,
+                  ),
+                  // Online status indicator - green dot (smaller for app bar)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: StreamBuilder<DocumentSnapshot>(
+                      stream: Api.getUserPresenceStream(widget.otherEmail),
+                      builder: (context, snapshot) {
+                        bool isOnline = false;
+                        if (snapshot.hasData && snapshot.data!.exists) {
+                          final data =
+                              snapshot.data!.data() as Map<String, dynamic>;
+                          isOnline = data['isOnline'] ?? false;
+                        }
+
+                        return AnimatedOpacity(
+                          opacity: isOnline ? 1.0 : 0.0,
+                          duration: Duration(milliseconds: 300),
+                          child: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -412,122 +534,156 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     ),
                   );
                 }
-                return ListView.builder(
-                  controller: _scrollCtrl,
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  itemCount: docs.length,
-                  itemBuilder: (c, i) {
-                    final m = docs[i].data();
-                    final isMe = (m['senderId'] as String?) ==
-                        widget.currentEmail.trim().toLowerCase();
-                    final text = (m['text'] ?? '') as String;
-                    final att = m['attachment'] as String?;
-                    final timestamp = m['timestamp'] as Timestamp?;
-                    final timeStr = timestamp != null
-                        ? _formatTime(timestamp.toDate())
-                        : '';
 
-                    return Align(
-                      alignment:
-                          isMe ? Alignment.centerRight : Alignment.centerLeft,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * .75),
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          child: Column(
-                            crossAxisAlignment: isMe
-                                ? CrossAxisAlignment.end
-                                : CrossAxisAlignment.start,
-                            children: [
-                              // Handle attachment separately without bubble
-                              if (att != null && att.isNotEmpty)
-                                Column(
-                                  crossAxisAlignment: isMe
-                                      ? CrossAxisAlignment.end
-                                      : CrossAxisAlignment.start,
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Image.network(
-                                        att,
-                                        fit: BoxFit.cover,
-                                        width:
-                                            MediaQuery.of(context).size.width *
+                // Convert to list and reverse for better performance
+                final messages = docs.map((doc) => doc.data()).toList();
+
+                return StreamBuilder<bool>(
+                  stream: _otherUserTypingStream,
+                  builder: (context, typingSnapshot) {
+                    final isOtherUserTyping = typingSnapshot.data ?? false;
+                    print(
+                        '[TYPING] StreamBuilder - isOtherUserTyping: $isOtherUserTyping, connectionState: ${typingSnapshot.connectionState}, hasError: ${typingSnapshot.hasError}');
+                    if (typingSnapshot.hasError) {
+                      print('[TYPING] Stream error: ${typingSnapshot.error}');
+                    }
+
+                    return ListView.builder(
+                      controller: _scrollCtrl,
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      itemCount: messages.length + (isOtherUserTyping ? 1 : 0),
+                      reverse:
+                          true, // Messages appear from bottom like Lets_Chat
+                      physics:
+                          const BouncingScrollPhysics(), // Smooth iOS-like scrolling
+                      itemBuilder: (c, i) {
+                        // If it's the typing indicator (first item due to reverse: true)
+                        if (isOtherUserTyping && i == 0) {
+                          print('[TYPING] Displaying typing indicator for ${widget.otherEmail}');
+                          return const TypingIndicator();
+                        }
+
+                        // Adjust index for messages
+                        final messageIndex = isOtherUserTyping ? i - 1 : i;
+                        final reversedIndex =
+                            messages.length - 1 - messageIndex;
+                        final m = messages[reversedIndex];
+                        final isMe = (m['senderId'] as String?) ==
+                            widget.currentEmail.trim().toLowerCase();
+                        final text = (m['text'] ?? '') as String;
+                        final att = m['attachment'] as String?;
+                        final timestamp = m['timestamp'] as Timestamp?;
+                        final timeStr = timestamp != null
+                            ? _formatTime(timestamp.toDate())
+                            : '';
+
+                        return Align(
+                          alignment: isMe
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                                maxWidth:
+                                    MediaQuery.of(context).size.width * .75),
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              child: Column(
+                                crossAxisAlignment: isMe
+                                    ? CrossAxisAlignment.end
+                                    : CrossAxisAlignment.start,
+                                children: [
+                                  // Handle attachment separately without bubble
+                                  if (att != null && att.isNotEmpty)
+                                    Column(
+                                      crossAxisAlignment: isMe
+                                          ? CrossAxisAlignment.end
+                                          : CrossAxisAlignment.start,
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          child: Image.network(
+                                            att,
+                                            fit: BoxFit.cover,
+                                            width: MediaQuery.of(context)
+                                                    .size
+                                                    .width *
                                                 0.6,
-                                        height: 200,
-                                      ),
-                                    ),
-                                    if (timeStr.isNotEmpty)
-                                      Padding(
-                                        padding:
-                                            const EdgeInsets.only(top: 4.0),
-                                        child: Text(
-                                          timeStr,
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.grey[500],
+                                            height: 200,
                                           ),
                                         ),
-                                      ),
-                                  ],
-                                ),
-                              // Handle text message with bubble (only if there's text and no attachment)
-                              if (text.isNotEmpty &&
-                                  (att == null || att.isEmpty))
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 12),
-                                  decoration: BoxDecoration(
-                                    color: isMe
-                                        ? AppConfig.primaryColor
-                                        : Colors.grey.shade100,
-                                    borderRadius: BorderRadius.only(
-                                      topLeft: Radius.circular(18),
-                                      topRight: Radius.circular(18),
-                                      bottomLeft: isMe
-                                          ? Radius.circular(18)
-                                          : Radius.circular(4),
-                                      bottomRight: isMe
-                                          ? Radius.circular(4)
-                                          : Radius.circular(18),
-                                    ),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        text,
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          color: isMe
-                                              ? Colors.white
-                                              : Colors.black,
-                                        ),
-                                      ),
-                                      if (timeStr.isNotEmpty)
-                                        Padding(
-                                          padding:
-                                              const EdgeInsets.only(top: 4.0),
-                                          child: Text(
-                                            timeStr,
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: isMe
-                                                  ? Colors.white
-                                                      .withOpacity(0.7)
-                                                  : Colors.grey[500],
+                                        if (timeStr.isNotEmpty)
+                                          Padding(
+                                            padding:
+                                                const EdgeInsets.only(top: 4.0),
+                                            child: Text(
+                                              timeStr,
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.grey[500],
+                                              ),
                                             ),
                                           ),
+                                      ],
+                                    ),
+                                  // Handle text message with bubble (only if there's text and no attachment)
+                                  if (text.isNotEmpty &&
+                                      (att == null || att.isEmpty))
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: isMe
+                                            ? AppConfig.primaryColor
+                                            : Colors.grey.shade100,
+                                        borderRadius: BorderRadius.only(
+                                          topLeft: Radius.circular(18),
+                                          topRight: Radius.circular(18),
+                                          bottomLeft: isMe
+                                              ? Radius.circular(18)
+                                              : Radius.circular(4),
+                                          bottomRight: isMe
+                                              ? Radius.circular(4)
+                                              : Radius.circular(18),
                                         ),
-                                    ],
-                                  ),
-                                ),
-                            ],
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            text,
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              color: isMe
+                                                  ? Colors.white
+                                                  : Colors.black,
+                                            ),
+                                          ),
+                                          if (timeStr.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                  top: 4.0),
+                                              child: Text(
+                                                timeStr,
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: isMe
+                                                      ? Colors.white
+                                                          .withOpacity(0.7)
+                                                      : Colors.grey[500],
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     );
                   },
                 );

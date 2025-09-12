@@ -927,7 +927,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (currentUser?.email != null) {
       Api.updateUserPresence(currentUser!.email!);
     }
-    
+
     // Clear input fields after successful login
     _clearInputFields();
 

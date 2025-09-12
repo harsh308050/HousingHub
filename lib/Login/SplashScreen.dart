@@ -38,7 +38,7 @@ class _SplashscreenState extends State<Splashscreen> {
           if (email.isNotEmpty) {
             // Set user presence as online for auto-login
             Api.updateUserPresence(email);
-            
+
             String userType = await Api.getUserType(email);
 
             if (userType == 'owner') {
@@ -101,16 +101,6 @@ class _SplashscreenState extends State<Splashscreen> {
                   ],
                   textStyle: TextStyle(
                     fontSize: 30.0,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ]),
-              AnimatedTextKit(animatedTexts: [
-                FadeAnimatedText(
-                  'Find Your Perfect Stay',
-                  duration: Duration(seconds: 4),
-                  textStyle: TextStyle(
-                    fontSize: 22.0,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
