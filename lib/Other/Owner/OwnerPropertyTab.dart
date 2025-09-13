@@ -3,6 +3,7 @@ import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Other/Owner/AddProperty.dart';
 import 'package:housinghub/Other/Owner/EditProperty.dart';
 import 'package:housinghub/Helper/API.dart';
+import 'package:housinghub/Helper/ShimmerHelper.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class OwnerPropertyTab extends StatefulWidget {
@@ -75,7 +76,7 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
             _buildTabBar(),
             Expanded(
               child: _isLoading
-                  ? Center(child: CircularProgressIndicator())
+                  ? ShimmerHelper.propertyCardShimmer()
                   : _error != null
                       ? Center(child: Text(_error!))
                       : TabBarView(

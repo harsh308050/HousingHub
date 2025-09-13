@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Helper/API.dart';
+import 'package:housinghub/Helper/ShimmerHelper.dart';
 import 'package:housinghub/Other/Tenant/TenantPropertyDetail.dart';
 
 class TenantSearchTab extends StatefulWidget {
@@ -24,7 +25,16 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
   final Map<String, List<String>> _filterOptions = {
     'gender': ['Male Only', 'Female Only', 'Both'],
     'propertyType': ['PG', 'Hostel', 'Apartment', 'House'],
-    'amenities': ['WiFi', 'Laundry', 'AC', 'Mess Facility', 'Parking'],
+    'amenities': [
+      'WiFi',
+      'Parking',
+      'Laundry',
+      'AC',
+      'Mess Facility',
+      'House Keeping',
+      'Furnished',
+      'Unfurnished',
+    ],
   };
 
   @override
@@ -160,6 +170,7 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
                           fontWeight: FontWeight.w600, color: Colors.black87)),
                 ),
                 RangeSlider(
+                  activeColor: AppConfig.primaryColor,
                   values: _priceRange,
                   min: 0,
                   max: _maxPriceFound,
@@ -270,9 +281,10 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
               child: _buildSearchBar(),
             ),
             _buildCategoryFiltersRow(),
+            const SizedBox(height: 12),
             _buildActiveFiltersRow(),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
                   Text('${filtered.length} Properties...',
@@ -296,7 +308,7 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
             ),
             Expanded(
               child: _loading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? ShimmerHelper.searchResultsShimmer()
                   : RefreshIndicator(
                       onRefresh: _fetchProperties,
                       child: ListView.builder(

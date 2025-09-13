@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:housinghub/Helper/API.dart';
+import 'package:housinghub/Helper/ShimmerHelper.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'TenantPropertyDetail.dart';
 import 'TenantSearchScreen.dart';
@@ -754,7 +756,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                       // List of States or Cities
                       Expanded(
                         child: _isLoading
-                            ? Center(child: CircularProgressIndicator())
+                            ? ShimmerHelper.propertyCardShimmer()
                             : _isStateTabSelected
                                 ? _buildStatesList()
                                 : _buildCitiesList(),
@@ -787,66 +789,84 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                 width: double.infinity,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  image: DecorationImage(
-                    image: NetworkImage(
-                      'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg',
-                    ),
-                    fit: BoxFit.cover,
-                  ),
                 ),
-                child: Stack(
-                  children: [
-                    // Gradient overlay only at the bottom
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      height: height *
-                          0.15, // adjust how much gradient should cover
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.vertical(
-                            bottom: Radius.circular(12),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: FutureBuilder<bool>(
+                    future: _preloadBannerImage(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.done &&
+                          snapshot.hasData &&
+                          snapshot.data == true) {
+                        // Image is preloaded and ready - show full banner
+                        return Container(
+                          decoration: BoxDecoration(
+                            image: DecorationImage(
+                              image: NetworkImage(
+                                  'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg'),
+                              fit: BoxFit.cover,
+                            ),
                           ),
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              Colors.black, // darker at the bottom
+                          child: Stack(
+                            children: [
+                              // Gradient overlay at bottom
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                height: height * 0.15,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.vertical(
+                                      bottom: Radius.circular(12),
+                                    ),
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.transparent,
+                                        Colors.black,
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // Text overlay
+                              Positioned(
+                                bottom: 8,
+                                left: 16,
+                                right: 16,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Get Upto 50% Off',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 20,
+                                      ),
+                                    ),
+                                    Text(
+                                      'On your first month\'s rent',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
-                        ),
-                      ),
-                    ),
-
-                    // Text stays above gradient
-                    Positioned(
-                      bottom: 8,
-                      left: 16,
-                      right: 16,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Get Upto 50% Off',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 20,
-                            ),
-                          ),
-                          Text(
-                            'On your first month\'s rent',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                        );
+                      } else {
+                        // Still loading or error - show shimmer
+                        return ShimmerHelper.bannerShimmer(
+                            height: height * 0.18);
+                      }
+                    },
+                  ),
                 ),
               ),
 
@@ -896,10 +916,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                         child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                                AppConfig.primaryColor),
-                          ),
+                          ShimmerHelper.propertyCardShimmer(),
                           SizedBox(height: 10),
                           Text(
                             'Loading properties in $_currentCity...',
@@ -1025,10 +1042,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return Center(
-                        child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                              AppConfig.primaryColor),
-                        ),
+                        child: ShimmerHelper.propertyCardShimmer(),
                       );
                     }
 
@@ -1163,14 +1177,6 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                                 color: Colors.grey[200],
                                 child: Center(
                                   child: CircularProgressIndicator(
-                                    value: loadingProgress.expectedTotalBytes !=
-                                            null
-                                        ? loadingProgress
-                                                .cumulativeBytesLoaded /
-                                            (loadingProgress
-                                                    .expectedTotalBytes ??
-                                                1)
-                                        : null,
                                     valueColor: AlwaysStoppedAnimation<Color>(
                                         AppConfig.primaryColor),
                                   ),
@@ -1329,5 +1335,17 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
         ),
       ),
     );
+  }
+
+  // Method to preload banner image
+  Future<bool> _preloadBannerImage() async {
+    try {
+      final imageProvider = NetworkImage(
+          'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg');
+      await precacheImage(imageProvider, context);
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 }

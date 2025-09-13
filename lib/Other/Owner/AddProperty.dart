@@ -7,7 +7,8 @@ import 'dart:async';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:housinghub/Helper/API.dart';
+import '../../Helper/API.dart';
+import '../../Helper/ShimmerHelper.dart';
 
 class AddProperty extends StatefulWidget {
   const AddProperty({super.key});
@@ -999,12 +1000,7 @@ class _AddPropertyState extends State<AddProperty> {
                   if (_isMapLoading)
                     Container(
                       color: Colors.white.withOpacity(0.8),
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                              AppConfig.primaryColor),
-                        ),
-                      ),
+                      child: ShimmerHelper.mapShimmer(),
                     ),
                 ],
               ),

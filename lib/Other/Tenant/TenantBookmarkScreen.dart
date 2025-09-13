@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:housinghub/Helper/API.dart';
+import 'package:housinghub/Helper/ShimmerHelper.dart';
 import 'package:housinghub/Other/Tenant/TenantPropertyDetail.dart';
 import 'package:housinghub/config/AppConfig.dart';
 
@@ -64,7 +65,7 @@ class _TenantBookmarksTabState extends State<TenantBookmarksTab> {
                 : null,
           ),
           body: waiting
-              ? const Center(child: CircularProgressIndicator())
+              ? ShimmerHelper.savedListingsShimmer(gridMode: _gridMode)
               : error != null
                   ? Center(child: Text('Error: $error'))
                   : Padding(

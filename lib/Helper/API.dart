@@ -2622,7 +2622,7 @@ class Api {
       final conversationId = chatRoomIdFor(currentEmail, otherEmail);
       print(
           '[TYPING] Updating typing status: $currentEmail -> $otherEmail, isTyping: $isTyping, conversationId: $conversationId');
-      
+
       final updateData = {
         'email': currentEmail,
         'lastSeen': FieldValue.serverTimestamp(),
@@ -2630,13 +2630,13 @@ class Api {
         'typingIn': isTyping ? conversationId : null,
         'typingTimestamp': isTyping ? FieldValue.serverTimestamp() : null,
       };
-      
+
       print('[TYPING] Update data: $updateData');
-      
+
       await _firestore.collection('UserPresence').doc(currentEmail).set(
-        updateData,
-        SetOptions(merge: true),
-      );
+            updateData,
+            SetOptions(merge: true),
+          );
       print('[TYPING] Typing status updated successfully in Firestore');
     } catch (e) {
       print('[TYPING] Error updating typing status: $e');
@@ -2656,7 +2656,8 @@ class Api {
         .snapshots()
         .map((doc) {
       if (!doc.exists) {
-        print('[TYPING] User presence document does not exist for: $otherEmail');
+        print(
+            '[TYPING] User presence document does not exist for: $otherEmail');
         return false;
       }
       final data = doc.data()!;
@@ -2671,7 +2672,8 @@ class Api {
         final now = DateTime.now();
         final typingTime = typingTimestamp.toDate();
         final differenceMs = now.difference(typingTime).inMilliseconds;
-        final isTyping = differenceMs <= 3000; // 3000ms = 3 seconds for minimal delay while handling network latency
+        final isTyping = differenceMs <=
+            3000; // 3000ms = 3 seconds for minimal delay while handling network latency
         print(
             '[TYPING] User $otherEmail isTyping: $isTyping (difference: ${differenceMs}ms, threshold: 3000ms)');
         return isTyping; // Consider typing active only if updated within last 3 seconds

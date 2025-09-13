@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:housinghub/Helper/API.dart';
+import 'package:housinghub/Helper/ShimmerHelper.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import '../Chat/ChatScreen.dart';
 
@@ -79,12 +80,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
             : Api.getNotificationsStream(_currentUserEmail),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(
-              child: CircularProgressIndicator(
-                valueColor:
-                    AlwaysStoppedAnimation<Color>(AppConfig.primaryColor),
-              ),
-            );
+            return ShimmerHelper.notificationShimmer();
           }
 
           if (snapshot.hasError) {

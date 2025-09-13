@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Other/Chat/TypingIndicator.dart';
+import 'package:housinghub/Helper/ShimmerHelper.dart';
 
 class ChatScreen extends StatefulWidget {
   final String currentEmail;
@@ -96,7 +97,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       Api.updateTypingStatus(widget.currentEmail, widget.otherEmail, true);
     } else if (text.isEmpty && _isCurrentUserTyping) {
       // User cleared the text field - stop immediately
-      print('[TYPING] User cleared text - stopping typing indicator immediately');
+      print(
+          '[TYPING] User cleared text - stopping typing indicator immediately');
       _isCurrentUserTyping = false;
       Api.updateTypingStatus(widget.currentEmail, widget.otherEmail, false);
     } else if (text.isNotEmpty && _isCurrentUserTyping) {
@@ -110,7 +112,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _typingTimer = Timer(const Duration(milliseconds: 500), () {
         // User stopped typing after 0.5 seconds of inactivity (ultra-fast for real-time response)
         if (_isCurrentUserTyping) {
-          print('[TYPING] Typing timeout - clearing status after 0.5s inactivity');
+          print(
+              '[TYPING] Typing timeout - clearing status after 0.5s inactivity');
           _isCurrentUserTyping = false;
           Api.updateTypingStatus(widget.currentEmail, widget.otherEmail, false);
         }
@@ -297,13 +300,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // Use loaded profile info if available, otherwise fallback to provided name or email-derived name
-    final displayName = _profileLoaded && _otherUserDisplayName.isNotEmpty
-        ? _otherUserDisplayName
-        : (widget.otherName ?? _formatDisplayName(widget.otherEmail));
-
-    final profilePicture = _profileLoaded ? _otherUserProfilePicture : '';
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -336,171 +332,35 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(width: 16),
-              // Profile picture or avatar with online status indicator
-              Stack(
-                children: [
-                  Container(
+              // Show shimmer while loading, actual profile when loaded
+              if (!_profileLoaded)
+                ShimmerHelper.chatHeaderShimmer()
+              else
+                _buildProfileSection(),
+              if (!_profileLoaded) const Spacer(),
+              if (_profileLoaded)
+                GestureDetector(
+                  onTap: _makePhoneCall,
+                  child: Container(
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: profilePicture.isEmpty
-                          ? _getAvatarColor(widget.otherEmail)
-                          : null,
-                      image: profilePicture.isNotEmpty
-                          ? DecorationImage(
-                              image: NetworkImage(profilePicture),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
-                    ),
-                    child: profilePicture.isEmpty
-                        ? Center(
-                            child: Text(
-                              Api.getUserInitials(
-                                  displayName, widget.otherEmail),
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600),
-                            ),
-                          )
-                        : null,
-                  ),
-                  // Online status indicator - green dot (smaller for app bar)
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: StreamBuilder<DocumentSnapshot>(
-                      stream: Api.getUserPresenceStream(widget.otherEmail),
-                      builder: (context, snapshot) {
-                        bool isOnline = false;
-                        if (snapshot.hasData && snapshot.data!.exists) {
-                          final data =
-                              snapshot.data!.data() as Map<String, dynamic>;
-                          isOnline = data['isOnline'] ?? false;
-                        }
-
-                        return AnimatedOpacity(
-                          opacity: isOnline ? 1.0 : 0.0,
-                          duration: Duration(milliseconds: 300),
-                          child: Container(
-                            width: 12,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              color: Colors.green,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 2,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      displayName,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black,
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.green.shade200,
+                        width: 1,
                       ),
                     ),
-                    StreamBuilder<DocumentSnapshot>(
-                      stream: Api.getUserPresenceStream(widget.otherEmail),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData || !snapshot.data!.exists) {
-                          return Text(
-                            'Last seen: Unknown',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          );
-                        }
-
-                        final data =
-                            snapshot.data!.data() as Map<String, dynamic>;
-                        final isOnline = data['isOnline'] ?? false;
-                        final lastSeen = data['lastSeen'] as Timestamp?;
-
-                        if (isOnline) {
-                          return Row(
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: Colors.green,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                'Online',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.green,
-                                ),
-                              ),
-                            ],
-                          );
-                        } else {
-                          // Check if user has been offline for more than 24 hours
-                          if (lastSeen != null) {
-                            return Text(
-                              Api.formatLastSeen(lastSeen),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            );
-                          } else {
-                            return Text(
-                              'Last seen: Unknown',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            );
-                          }
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: _makePhoneCall,
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.green.shade200,
-                      width: 1,
-                    ),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      Icons.phone,
-                      size: 20,
-                      color: Colors.green.shade600,
+                    child: Center(
+                      child: Icon(
+                        Icons.phone,
+                        size: 20,
+                        color: Colors.green.shade600,
+                      ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -513,7 +373,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   widget.currentEmail, widget.otherEmail),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return ShimmerHelper.chatMessageShimmer();
                 }
                 final docs = snapshot.data?.docs ?? [];
                 if (docs.isEmpty) {
@@ -559,7 +419,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       itemBuilder: (c, i) {
                         // If it's the typing indicator (first item due to reverse: true)
                         if (isOtherUserTyping && i == 0) {
-                          print('[TYPING] Displaying typing indicator for ${widget.otherEmail}');
+                          print(
+                              '[TYPING] Displaying typing indicator for ${widget.otherEmail}');
                           return const TypingIndicator();
                         }
 
@@ -772,6 +633,164 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // Build the actual profile section once data is loaded
+  Widget _buildProfileSection() {
+    // Use loaded profile info if available, otherwise fallback to provided name or email-derived name
+    final displayName = _profileLoaded && _otherUserDisplayName.isNotEmpty
+        ? _otherUserDisplayName
+        : (widget.otherName ?? _formatDisplayName(widget.otherEmail));
+
+    final profilePicture = _profileLoaded ? _otherUserProfilePicture : '';
+
+    return Expanded(
+      child: Row(
+        children: [
+          // Profile picture or avatar with online status indicator
+          Stack(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: profilePicture.isEmpty
+                      ? _getAvatarColor(widget.otherEmail)
+                      : null,
+                  image: profilePicture.isNotEmpty
+                      ? DecorationImage(
+                          image: NetworkImage(profilePicture),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+                child: profilePicture.isEmpty
+                    ? Center(
+                        child: Text(
+                          Api.getUserInitials(displayName, widget.otherEmail),
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      )
+                    : null,
+              ),
+              // Online status indicator - green dot (smaller for app bar)
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: StreamBuilder<DocumentSnapshot>(
+                  stream: Api.getUserPresenceStream(widget.otherEmail),
+                  builder: (context, snapshot) {
+                    bool isOnline = false;
+                    if (snapshot.hasData && snapshot.data!.exists) {
+                      final data =
+                          snapshot.data!.data() as Map<String, dynamic>;
+                      isOnline = data['isOnline'] ?? false;
+                    }
+
+                    return AnimatedOpacity(
+                      opacity: isOnline ? 1.0 : 0.0,
+                      duration: Duration(milliseconds: 300),
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displayName,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                  ),
+                ),
+                StreamBuilder<DocumentSnapshot>(
+                  stream: Api.getUserPresenceStream(widget.otherEmail),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData || !snapshot.data!.exists) {
+                      return Text(
+                        'Last seen: Unknown',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      );
+                    }
+
+                    final data = snapshot.data!.data() as Map<String, dynamic>;
+                    final isOnline = data['isOnline'] ?? false;
+                    final lastSeen = data['lastSeen'] as Timestamp?;
+
+                    if (isOnline) {
+                      return Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Online',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.green,
+                            ),
+                          ),
+                        ],
+                      );
+                    } else {
+                      // Check if user has been offline for more than 24 hours
+                      if (lastSeen != null) {
+                        return Text(
+                          Api.formatLastSeen(lastSeen),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        );
+                      } else {
+                        return Text(
+                          'Last seen: Unknown',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

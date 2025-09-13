@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:housinghub/Helper/API.dart';
+import '../../../Helper/ShimmerHelper.dart';
 import 'package:housinghub/Other/Chat/ChatScreen.dart';
 
 class TenantMessagesTab extends StatefulWidget {
@@ -59,7 +60,7 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
                     return Center(child: Text('Error loading messages'));
                   }
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                    return ShimmerHelper.messageListShimmer();
                   }
                   final docs = [...(snapshot.data?.docs ?? [])];
                   // Sort by lastTimestamp desc client-side
@@ -119,9 +120,19 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
                       return FutureBuilder<Map<String, String>>(
                         future: _getUserProfile(other),
                         builder: (context, profileSnapshot) {
-                          String displayName = 'Loading...';
+                          // Show shimmer while loading profile data
+                          if (profileSnapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return Container(
+                              margin: EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              child: ShimmerHelper.messageListShimmer(),
+                            );
+                          }
+
+                          String displayName = _formatDisplayName(other);
                           String profilePicture = '';
-                          String avatarText = '?';
+                          String avatarText = _getInitials(other);
 
                           if (profileSnapshot.connectionState ==
                                   ConnectionState.done &&
@@ -132,15 +143,6 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
                             profilePicture = profile['profilePicture'] ?? '';
                             avatarText =
                                 Api.getUserInitials(displayName, other);
-                          } else if (profileSnapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            // Show loading state with email-based fallback
-                            displayName = _formatDisplayName(other);
-                            avatarText = _getInitials(other);
-                          } else {
-                            // Error state - fallback to email-based display
-                            displayName = _formatDisplayName(other);
-                            avatarText = _getInitials(other);
                           }
 
                           return _buildConversationItem(

@@ -279,9 +279,27 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.arrow_back_ios_new,
+                  size: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ),
         ),
         title: Text(
           propertyTitle,
@@ -289,16 +307,48 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
-          IconButton(
-            icon: Icon(Icons.share_outlined, color: Colors.black),
-            onPressed: _shareProperty,
-          ),
-          IconButton(
-            icon: Icon(
-              _isSaved ? Icons.favorite : Icons.favorite_border,
-              color: _isSaved ? Colors.red : Colors.black,
+          GestureDetector(
+            onTap: () => _shareProperty(),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.share_outlined,
+                  size: 16,
+                  color: Colors.black,
+                ),
+              ),
             ),
-            onPressed: _toggleSave,
+          ),
+          SizedBox(
+            width: 7,
+          ),
+          GestureDetector(
+            onTap: () => _toggleSave(),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Center(
+                child: Icon(
+                  _isSaved ? Icons.favorite : Icons.favorite_border,
+                  color: _isSaved ? Colors.red : Colors.black,
+                ),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 16,
           ),
         ],
       ),

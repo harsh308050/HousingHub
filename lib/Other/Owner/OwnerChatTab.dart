@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:housinghub/Helper/API.dart';
+import 'package:housinghub/Helper/ShimmerHelper.dart';
 import 'package:housinghub/Other/Chat/ChatScreen.dart';
 
 class OwnerChatTab extends StatefulWidget {
@@ -61,7 +62,7 @@ class _OwnerChatTabState extends State<OwnerChatTab> {
                     return Center(child: Text('Error loading messages'));
                   }
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                    return ShimmerHelper.listItemShimmer();
                   }
                   final rooms = [...(snapshot.data?.docs ?? [])];
                   rooms.sort((a, b) {
