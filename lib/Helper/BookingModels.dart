@@ -274,7 +274,8 @@ class BookingPropertyData {
       propertyType: propertyData['propertyType']?.toString() ?? '',
       roomType: propertyData['roomType']?.toString() ?? '',
       rent: _parsePrice(propertyData['price']),
-      deposit: _parsePrice(propertyData['deposit']),
+      deposit: _parsePrice(
+          propertyData['securityDeposit'] ?? propertyData['deposit']),
       amenities: List<String>.from(propertyData['amenities'] ?? []),
       images: List<String>.from(propertyData['images'] ?? []),
       ownerEmail: propertyData['ownerEmail']?.toString() ?? '',

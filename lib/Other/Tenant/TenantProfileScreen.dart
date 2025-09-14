@@ -31,6 +31,12 @@ class _TenantProfileTabState extends State<TenantProfileTab>
   String gender = '';
   String? photoUrl;
 
+  // Booking counts
+  int activeBookingsCount = 0;
+  int pendingBookingsCount = 0;
+  int totalBookingsCount = 0;
+  bool _loadingBookingCounts = true;
+
   final ImagePicker _picker = ImagePicker();
 
   @override
@@ -39,6 +45,7 @@ class _TenantProfileTabState extends State<TenantProfileTab>
     _tabController = TabController(length: 3, vsync: this);
     _hydrateFromInputs();
     _loadLatestTenantData();
+    _loadBookingCounts();
   }
 
   void _hydrateFromInputs() {
@@ -76,6 +83,53 @@ class _TenantProfileTabState extends State<TenantProfileTab>
     }
   }
 
+  Future<void> _loadBookingCounts() async {
+    if (email.isEmpty) return;
+
+    try {
+      setState(() {
+        _loadingBookingCounts = true;
+      });
+
+      // Fetch all tenant bookings
+      final bookings = await Api.getTenantBookings(email);
+
+      // Count bookings by status
+      int active = 0;
+      int pending = 0;
+      int total = bookings.length;
+
+      for (var booking in bookings) {
+        final status = booking['status']?.toString().toLowerCase() ?? '';
+        final paymentInfo = booking['paymentInfo'] as Map<String, dynamic>?;
+        final paymentStatus =
+            paymentInfo?['status']?.toString().toLowerCase() ?? 'pending';
+
+        // Only count bookings with completed payments
+        if (paymentStatus == 'completed') {
+          if (status == 'accepted' || status == 'completed') {
+            active++;
+          } else if (status == 'pending') {
+            pending++;
+          }
+        }
+        // If payment is not completed, it's still counted in total but not in active/pending
+      }
+
+      setState(() {
+        activeBookingsCount = active;
+        pendingBookingsCount = pending;
+        totalBookingsCount = total;
+        _loadingBookingCounts = false;
+      });
+    } catch (e) {
+      print('Error loading booking counts: $e');
+      setState(() {
+        _loadingBookingCounts = false;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -95,7 +149,12 @@ class _TenantProfileTabState extends State<TenantProfileTab>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _BookingsTab(),
+                  _BookingsTab(
+                    activeCount: activeBookingsCount,
+                    pendingCount: pendingBookingsCount,
+                    totalCount: totalBookingsCount,
+                    isLoading: _loadingBookingCounts,
+                  ),
                   _DocumentsTab(email: email),
                   _PreferencesTab(
                     formKey: _formKey,
@@ -782,7 +841,17 @@ class _StatusChip extends StatelessWidget {
 }
 
 class _BookingsTab extends StatelessWidget {
-  const _BookingsTab();
+  final int activeCount;
+  final int pendingCount;
+  final int totalCount;
+  final bool isLoading;
+
+  const _BookingsTab({
+    required this.activeCount,
+    required this.pendingCount,
+    required this.totalCount,
+    required this.isLoading,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -825,7 +894,7 @@ class _BookingsTab extends StatelessWidget {
               Expanded(
                 child: _buildStatCard(
                   'Active',
-                  '0',
+                  isLoading ? '...' : '$activeCount',
                   Icons.home_outlined,
                   Colors.green,
                 ),
@@ -834,7 +903,7 @@ class _BookingsTab extends StatelessWidget {
               Expanded(
                 child: _buildStatCard(
                   'Pending',
-                  '0',
+                  isLoading ? '...' : '$pendingCount',
                   Icons.schedule_outlined,
                   Colors.orange,
                 ),
@@ -843,7 +912,7 @@ class _BookingsTab extends StatelessWidget {
               Expanded(
                 child: _buildStatCard(
                   'Total',
-                  '0',
+                  isLoading ? '...' : '$totalCount',
                   Icons.book_outlined,
                   AppConfig.primaryColor,
                 ),

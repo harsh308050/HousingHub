@@ -1897,11 +1897,9 @@ class Api {
         // Note: Filtering by amenities requires a different approach due to Firestore limitations
         // with array queries. We'll do this manually after retrieving results.
 
-        // Execute the query
-        QuerySnapshot propertiesSnapshot = await propertiesQuery
-            .orderBy('createdAt', descending: true)
-            .limit(limit)
-            .get();
+        // Execute the query without orderBy to avoid complex indexes
+        QuerySnapshot propertiesSnapshot =
+            await propertiesQuery.limit(limit).get();
 
         // Process the results
         for (var propertyDoc in propertiesSnapshot.docs) {
@@ -2874,25 +2872,85 @@ class Api {
     required Map<String, dynamic> idProof,
     required DateTime checkInDate,
     required double amount,
+    String? ownerName,
+    String? ownerMobileNumber,
     String? notes,
+    String? paymentId,
+    String? paymentSignature,
+    DateTime? paymentCompletedAt,
+    String? paymentStatus,
   }) async {
     try {
       final bookingId = const Uuid().v4();
+
+      // Resolve owner details (name and mobile) from provided args, propertyData, or owner profile fallback
+      String ownerNameResolved = (ownerName ??
+              propertyData['ownerName']?.toString() ??
+              propertyData['ownerFullName']?.toString() ??
+              '')
+          .trim();
+      String ownerMobileResolved = (ownerMobileNumber ??
+              propertyData['ownerPhone']?.toString() ??
+              propertyData['ownerMobileNumber']?.toString() ??
+              propertyData['ownerContact']?.toString() ??
+              '')
+          .trim();
+
+      // If still missing, try fetching from Owners profile
+      if (ownerNameResolved.isEmpty || ownerMobileResolved.isEmpty) {
+        try {
+          final ownerDoc =
+              await _firestore.collection('Owners').doc(ownerEmail).get();
+          if (ownerDoc.exists) {
+            final od = ownerDoc.data()!;
+            if (ownerNameResolved.isEmpty) {
+              final first = (od['firstName']?.toString() ?? '').trim();
+              final last = (od['lastName']?.toString() ?? '').trim();
+              final full = [first, last].where((e) => e.isNotEmpty).join(' ');
+              ownerNameResolved = (od['fullName']?.toString() ??
+                      od['ownerName']?.toString() ??
+                      od['name']?.toString() ??
+                      full)
+                  .trim();
+            }
+            if (ownerMobileResolved.isEmpty) {
+              ownerMobileResolved = (od['phoneNumber']?.toString() ??
+                      od['mobileNumber']?.toString() ??
+                      od['contact']?.toString() ??
+                      od['phone']?.toString() ??
+                      '')
+                  .trim();
+            }
+          }
+        } catch (e) {
+          // Best-effort; ignore lookup failures
+          print('Warning: Could not resolve owner profile: $e');
+        }
+      }
 
       final bookingData = {
         'bookingId': bookingId,
         'tenantEmail': tenantEmail,
         'ownerEmail': ownerEmail,
+        if (ownerNameResolved.isNotEmpty) 'ownerName': ownerNameResolved,
+        if (ownerMobileResolved.isNotEmpty)
+          'ownerMobileNumber': ownerMobileResolved,
         'propertyId': propertyId,
         'propertyData': propertyData,
         'tenantData': tenantData,
         'idProof': idProof,
-        'status': 'Pending',
+        'status': paymentStatus == 'Completed'
+            ? 'Pending'
+            : 'Draft', // Draft until payment is completed
         'paymentInfo': {
           'amount': amount,
-          'status': 'Pending',
+          'status': paymentStatus ?? 'Pending',
           'currency': 'INR',
           'paymentMethod': 'Razorpay',
+          'paymentId': paymentId,
+          'paymentSignature': paymentSignature,
+          'paymentCompletedAt': paymentCompletedAt?.toIso8601String(),
+          'createdAt': DateTime.now().toIso8601String(),
         },
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -3370,6 +3428,101 @@ class Api {
     } catch (e) {
       print('Error updating booking payment: $e');
       throw Exception('Failed to update payment: $e');
+    }
+  }
+
+  // Update booking with receipt URL
+  static Future<void> updateBookingWithReceiptUrl({
+    required String bookingId,
+    required String tenantEmail,
+    required String ownerEmail,
+    required String receiptUrl,
+    String? ownerName,
+    String? ownerMobileNumber,
+  }) async {
+    try {
+      // Resolve owner fields if not provided
+      String ownerNameResolved = (ownerName ?? '').trim();
+      String ownerMobileResolved = (ownerMobileNumber ?? '').trim();
+      if (ownerNameResolved.isEmpty || ownerMobileResolved.isEmpty) {
+        // Try to pull from central booking or owner profile
+        try {
+          final central = await _firestore.collection('Bookings').doc(bookingId).get();
+          final centralData = central.data();
+          if (centralData != null) {
+            if (ownerNameResolved.isEmpty) {
+              ownerNameResolved = (centralData['ownerName']?.toString() ?? '').trim();
+              if (ownerNameResolved.isEmpty) {
+                final pd = centralData['propertyData'] as Map<String, dynamic>?;
+                if (pd != null) {
+                  ownerNameResolved = (pd['ownerName']?.toString() ?? pd['ownerFullName']?.toString() ?? '').trim();
+                }
+              }
+            }
+            if (ownerMobileResolved.isEmpty) {
+              ownerMobileResolved = (centralData['ownerMobileNumber']?.toString() ?? '').trim();
+              if (ownerMobileResolved.isEmpty) {
+                final pd = centralData['propertyData'] as Map<String, dynamic>?;
+                if (pd != null) {
+                  ownerMobileResolved = (pd['ownerPhone']?.toString() ?? pd['ownerMobileNumber']?.toString() ?? pd['ownerContact']?.toString() ?? '').trim();
+                }
+              }
+            }
+          }
+        } catch (e) {
+          print('Warning: Could not resolve owner from booking: $e');
+        }
+      }
+      if (ownerNameResolved.isEmpty || ownerMobileResolved.isEmpty) {
+        try {
+          final ownerDoc = await _firestore.collection('Owners').doc(ownerEmail).get();
+          if (ownerDoc.exists) {
+            final od = ownerDoc.data()!;
+            if (ownerNameResolved.isEmpty) {
+              final first = (od['firstName']?.toString() ?? '').trim();
+              final last = (od['lastName']?.toString() ?? '').trim();
+              final full = [first, last].where((e) => e.isNotEmpty).join(' ');
+              ownerNameResolved = (od['fullName']?.toString() ?? od['ownerName']?.toString() ?? od['name']?.toString() ?? full).trim();
+            }
+            if (ownerMobileResolved.isEmpty) {
+              ownerMobileResolved = (od['phoneNumber']?.toString() ?? od['mobileNumber']?.toString() ?? od['contact']?.toString() ?? od['phone']?.toString() ?? '').trim();
+            }
+          }
+        } catch (e) {
+          print('Warning: Could not resolve owner profile: $e');
+        }
+      }
+
+      final updateData = {
+        'receiptUrl': receiptUrl,
+        'receiptGeneratedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        if (ownerNameResolved.isNotEmpty) 'ownerName': ownerNameResolved,
+        if (ownerMobileResolved.isNotEmpty) 'ownerMobileNumber': ownerMobileResolved,
+      };
+
+      // Update in all collections using the bookingId directly
+      await Future.wait([
+        _firestore
+            .collection('Tenants')
+            .doc(tenantEmail)
+            .collection('Bookings')
+            .doc(bookingId)
+            .update(updateData),
+        if (ownerEmail.isNotEmpty)
+          _firestore
+              .collection('Owners')
+              .doc(ownerEmail)
+              .collection('Bookings')
+              .doc(bookingId)
+              .update(updateData),
+        _firestore.collection('Bookings').doc(bookingId).update(updateData),
+      ]);
+
+      print('Booking receipt URL updated successfully: $bookingId');
+    } catch (e) {
+      print('Error updating booking receipt URL: $e');
+      throw Exception('Failed to update receipt URL: $e');
     }
   }
 

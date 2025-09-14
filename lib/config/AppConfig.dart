@@ -6,9 +6,26 @@ class AppConfig {
   static const String appName = 'HousingHub';
   static const String logoPath = 'assets/images/Logo.png';
 
+  // Feature toggles
+  static const bool useProfessionalReceipt =
+      true; // Switch between simple/pro receipts
+  static const bool showLogoOnReceipt = true;
+
+  // Company / brand details
+  static const String companyName = 'HousingHub';
+  static const String companyTagline = 'Your Trusted Property Booking Partner';
+  static const String companyAddressLine1 = 'Ahmedabad, Gujarat, India';
+  static const String companyAddressLine2 = '';
+  static const String companyWebsite = 'https://housinghub.app';
+  static const String termsUrl = 'https://housinghub.app/terms';
+  static const String privacyUrl = 'https://housinghub.app/privacy';
+  static const String receiptVerificationBaseUrl =
+      'https://housinghub.app/verify/receipt';
+
   // Contact
   static const String supportEmail = 'harshparmar.dev@gmail.com';
   static const String developerEmail = 'harshparmar308050@gmail.com';
+  static const String supportPhone = '+91-1234567890';
   static const String privacyEffectiveDate = 'June 30, 2025';
 
   // Colors

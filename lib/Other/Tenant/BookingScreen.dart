@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/Helper/BookingModels.dart';
+import 'package:housinghub/Helper/PdfReceiptGenerator.dart';
 
 class BookingScreen extends StatefulWidget {
   final Map<String, dynamic> propertyData;
@@ -42,8 +43,6 @@ class _BookingScreenState extends State<BookingScreen>
 
   // Document selection
   List<Map<String, dynamic>> _availableDocuments = [];
-  Map<String, dynamic>? _selectedDocument; // Keep for backward compatibility
-  String _selectedDocumentType = 'Aadhaar Card'; // Keep for backward compatibility
 
   // Required documents for booking - all must be provided
   Map<String, Map<String, dynamic>?> _selectedDocuments = {
@@ -65,6 +64,8 @@ class _BookingScreenState extends State<BookingScreen>
   late Razorpay _razorpay;
   bool _paymentCompleted = false;
   String? _paymentId;
+  String? _paymentSignature;
+  DateTime? _paymentCompletedAt;
 
   // Notes
   final TextEditingController _notesController = TextEditingController();
@@ -140,6 +141,8 @@ class _BookingScreenState extends State<BookingScreen>
     setState(() {
       _paymentCompleted = true;
       _paymentId = response.paymentId;
+      _paymentSignature = response.signature;
+      _paymentCompletedAt = DateTime.now();
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -147,7 +150,7 @@ class _BookingScreenState extends State<BookingScreen>
         backgroundColor: Colors.green,
       ),
     );
-    
+
     // Automatically proceed to next step after successful payment
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) {
@@ -271,12 +274,12 @@ class _BookingScreenState extends State<BookingScreen>
                 backgroundColor: AppConfig.primaryColor,
               ),
             );
-            
+
             final url = await Api.uploadImageToCloudinary(
               doc['tempFile'] as File,
               'tenant_documents/${user.email!.replaceAll('@', '_')}',
             );
-            
+
             allDocuments[docType] = {
               'documentId': DateTime.now().millisecondsSinceEpoch.toString(),
               'documentType': docType,
@@ -291,23 +294,117 @@ class _BookingScreenState extends State<BookingScreen>
         }
       }
 
+      // Extract owner fields
+      final String ownerEmail = widget.propertyData['ownerEmail'] ?? '';
+      final String ownerNameField = (widget.propertyData['ownerName'] ??
+              widget.propertyData['ownerFullName'] ??
+              '')
+          .toString()
+          .trim();
+      final String ownerMobileField = (widget.propertyData['ownerPhone'] ??
+                  widget.propertyData['ownerMobileNumber'] ??
+                  widget.propertyData['ownerContact'])
+              ?.toString() ??
+          '';
+
       // Create booking
-      await Api.createBooking(
+      final bookingId = await Api.createBooking(
         tenantEmail: user.email!,
-        ownerEmail: widget.propertyData['ownerEmail'] ?? '',
+        ownerEmail: ownerEmail,
         propertyId: widget.propertyData['id'] ?? '',
         propertyData: propertyData.toMap(),
         tenantData: tenantData.toMap(),
         idProof: allDocuments, // Changed to use all documents
         checkInDate: _selectedCheckInDate!,
         amount: propertyData.totalAmount,
+        ownerName: ownerNameField.isNotEmpty ? ownerNameField : null,
+        ownerMobileNumber:
+            ownerMobileField.isNotEmpty ? ownerMobileField : null,
         notes: _notesController.text.isEmpty ? null : _notesController.text,
+        paymentId: _paymentId,
+        paymentSignature: _paymentSignature,
+        paymentCompletedAt: _paymentCompletedAt,
+        paymentStatus: _paymentCompleted ? 'Completed' : 'Pending',
       );
+
+      // Generate and upload PDF receipt if payment was completed
+      String? receiptUrl;
+      if (_paymentCompleted && _paymentId != null) {
+        try {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Generating receipt...'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+
+          final rentAmount = _parsePrice(widget.propertyData['price']);
+          final depositAmount = _parsePrice(
+              widget.propertyData['securityDeposit'] ??
+                  widget.propertyData['deposit']);
+          final ownerName = ownerNameField;
+          final nameParts = ownerName.split(' ');
+          final ownerFirst = nameParts.isNotEmpty ? nameParts.first : '';
+          final ownerLast =
+              nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+
+          receiptUrl = await PdfReceiptGenerator.generateAndUploadReceipt(
+            bookingId: bookingId,
+            tenantData: tenantData.toMap(),
+            propertyData: propertyData.toMap(),
+            ownerData: {
+              'firstName': ownerFirst,
+              'lastName': ownerLast,
+              'ownerName': ownerName,
+              'mobileNumber': ownerMobileField,
+            },
+            paymentData: {
+              'paymentId': _paymentId,
+              'paymentSignature': _paymentSignature,
+              'status': 'Captured',
+              'paymentMethod': 'Razorpay',
+              'currency': 'INR',
+            },
+            checkInDate: _selectedCheckInDate!,
+            paymentDate: _paymentCompletedAt!,
+            rentAmount: rentAmount,
+            depositAmount: depositAmount,
+            notes: _notesController.text.isEmpty ? null : _notesController.text,
+          );
+
+          // Update booking with receipt URL
+          await Api.updateBookingWithReceiptUrl(
+            bookingId: bookingId,
+            tenantEmail: user.email!,
+            ownerEmail: ownerEmail,
+            receiptUrl: receiptUrl,
+            ownerName: ownerNameField.isNotEmpty ? ownerNameField : null,
+            ownerMobileNumber:
+                ownerMobileField.isNotEmpty ? ownerMobileField : null,
+          );
+        } catch (e) {
+          print('Error generating PDF receipt: $e');
+          // Don't fail the booking if receipt generation fails
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                    'Booking successful, but receipt generation failed. You can contact support for a receipt copy.'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 4),
+              ),
+            );
+          }
+        }
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Booking request submitted successfully!'),
+          SnackBar(
+            content: Text(
+                _paymentCompleted && receiptUrl != null && receiptUrl.isNotEmpty
+                    ? 'Booking submitted successfully with receipt!'
+                    : 'Booking request submitted successfully!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -713,29 +810,29 @@ class _BookingScreenState extends State<BookingScreen>
           }).toList(),
 
           const SizedBox(height: 20),
-          
+
           // Show completion status
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: _areAllDocumentsSelected() 
-                  ? Colors.green[50] 
+              color: _areAllDocumentsSelected()
+                  ? Colors.green[50]
                   : Colors.orange[50],
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: _areAllDocumentsSelected() 
-                    ? Colors.green[300]! 
+                color: _areAllDocumentsSelected()
+                    ? Colors.green[300]!
                     : Colors.orange[300]!,
               ),
             ),
             child: Row(
               children: [
                 Icon(
-                  _areAllDocumentsSelected() 
-                      ? Icons.check_circle 
-                      : Icons.warning,
-                  color: _areAllDocumentsSelected() 
-                      ? Colors.green[600] 
+                  _areAllDocumentsSelected()
+                      ? Icons.check_circle
+                      : Icons.report_gmailerrorred_outlined,
+                  color: _areAllDocumentsSelected()
+                      ? Colors.green[600]
                       : Colors.orange[600],
                 ),
                 const SizedBox(width: 12),
@@ -746,8 +843,8 @@ class _BookingScreenState extends State<BookingScreen>
                         : 'Please select all required documents to continue.',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: _areAllDocumentsSelected() 
-                          ? Colors.green[700] 
+                      color: _areAllDocumentsSelected()
+                          ? Colors.green[700]
                           : Colors.orange[700],
                     ),
                   ),
@@ -763,7 +860,7 @@ class _BookingScreenState extends State<BookingScreen>
   Widget _buildDocumentRequirementCard(String docType) {
     final selectedDoc = _selectedDocuments[docType];
     final isCompleted = selectedDoc != null;
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -771,9 +868,7 @@ class _BookingScreenState extends State<BookingScreen>
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isCompleted 
-              ? Colors.green[300]! 
-              : Colors.grey[300]!,
+          color: isCompleted ? Colors.green[300]! : Colors.grey[300]!,
           width: isCompleted ? 2 : 1,
         ),
       ),
@@ -783,7 +878,9 @@ class _BookingScreenState extends State<BookingScreen>
           Row(
             children: [
               Icon(
-                isCompleted ? Icons.check_circle : Icons.pending,
+                isCompleted
+                    ? Icons.check_circle
+                    : Icons.report_gmailerrorred_outlined,
                 color: isCompleted ? Colors.green[600] : Colors.orange[600],
               ),
               const SizedBox(width: 12),
@@ -799,7 +896,6 @@ class _BookingScreenState extends State<BookingScreen>
               ),
             ],
           ),
-          
           if (isCompleted) ...[
             const SizedBox(height: 8),
             Container(
@@ -811,19 +907,20 @@ class _BookingScreenState extends State<BookingScreen>
               child: Row(
                 children: [
                   Icon(
-                    selectedDoc['isUploaded'] == true 
-                        ? Icons.upload_file 
-                        : Icons.description, 
-                    size: 16, 
-                    color: Colors.green[600]
-                  ),
+                      selectedDoc['isUploaded'] == true
+                          ? Icons.upload_file
+                          : Icons.description,
+                      size: 16,
+                      color: Colors.green[600]),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          selectedDoc['name'] ?? selectedDoc['documentType'] ?? 'Document',
+                          selectedDoc['name'] ??
+                              selectedDoc['documentType'] ??
+                              'Document',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.green[700],
@@ -864,7 +961,8 @@ class _BookingScreenState extends State<BookingScreen>
                   child: GestureDetector(
                     onTap: () => _selectDocumentForType(docType),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 8, horizontal: 12),
                       decoration: BoxDecoration(
                         color: AppConfig.primaryColor,
                         borderRadius: BorderRadius.circular(8),
@@ -892,7 +990,8 @@ class _BookingScreenState extends State<BookingScreen>
                   child: GestureDetector(
                     onTap: () => _uploadDocumentForType(docType),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 8, horizontal: 12),
                       decoration: BoxDecoration(
                         color: Colors.green[600],
                         borderRadius: BorderRadius.circular(8),
@@ -971,7 +1070,8 @@ class _BookingScreenState extends State<BookingScreen>
                     _selectDocumentForType(docType);
                   },
                   icon: Icon(Icons.folder, color: Colors.white),
-                  label: Text('Select from Existing Documents', style: TextStyle(color: Colors.white)),
+                  label: Text('Select from Existing Documents',
+                      style: TextStyle(color: Colors.white)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppConfig.primaryColor,
                   ),
@@ -986,7 +1086,8 @@ class _BookingScreenState extends State<BookingScreen>
                     _uploadDocumentForType(docType);
                   },
                   icon: Icon(Icons.camera_alt, color: Colors.white),
-                  label: Text('Upload New Document', style: TextStyle(color: Colors.white)),
+                  label: Text('Upload New Document',
+                      style: TextStyle(color: Colors.white)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green[600],
                   ),
@@ -1002,20 +1103,24 @@ class _BookingScreenState extends State<BookingScreen>
   bool _isDocumentTypeMatch(String docTypeFromDoc, String requiredType) {
     final doc = docTypeFromDoc.toLowerCase();
     final required = requiredType.toLowerCase();
-    
+
     switch (required) {
       case 'proof of identity':
-        return doc.contains('aadhaar') || doc.contains('passport') || 
-               doc.contains('voter') || doc.contains('driver') ||
-               doc.contains('identity');
+        return doc.contains('aadhaar') ||
+            doc.contains('passport') ||
+            doc.contains('voter') ||
+            doc.contains('driver') ||
+            doc.contains('identity');
       case 'proof of address':
-        return doc.contains('address') || doc.contains('utility') ||
-               doc.contains('bank') || doc.contains('rental');
+        return doc.contains('address') ||
+            doc.contains('utility') ||
+            doc.contains('bank') ||
+            doc.contains('rental');
       case 'pan card':
         return doc.contains('pan');
       case 'passport photo':
         return doc.contains('passport') && doc.contains('photo') ||
-               doc.contains('photograph');
+            doc.contains('photograph');
       default:
         return false;
     }
@@ -1045,7 +1150,8 @@ class _BookingScreenState extends State<BookingScreen>
                   child: ElevatedButton.icon(
                     onPressed: () => Navigator.pop(context, ImageSource.camera),
                     icon: Icon(Icons.camera_alt, color: Colors.white),
-                    label: Text('Take Photo', style: TextStyle(color: Colors.white)),
+                    label: Text('Take Photo',
+                        style: TextStyle(color: Colors.white)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue[600],
                     ),
@@ -1055,9 +1161,11 @@ class _BookingScreenState extends State<BookingScreen>
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: () => Navigator.pop(context, ImageSource.gallery),
+                    onPressed: () =>
+                        Navigator.pop(context, ImageSource.gallery),
                     icon: Icon(Icons.photo_library, color: Colors.white),
-                    label: Text('Choose from Gallery', style: TextStyle(color: Colors.white)),
+                    label: Text('Choose from Gallery',
+                        style: TextStyle(color: Colors.white)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green[600],
                     ),
@@ -1088,7 +1196,7 @@ class _BookingScreenState extends State<BookingScreen>
               'tempFile': File(image.path),
             };
           });
-          
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('$docType uploaded successfully!'),
@@ -1107,7 +1215,8 @@ class _BookingScreenState extends State<BookingScreen>
     }
   }
 
-  void _showDocumentSelectionDialog(String docType, List<Map<String, dynamic>> availableDocs) {
+  void _showDocumentSelectionDialog(
+      String docType, List<Map<String, dynamic>> availableDocs) {
     showModalBottomSheet(
       context: context,
       builder: (context) {
@@ -1125,17 +1234,21 @@ class _BookingScreenState extends State<BookingScreen>
                 ),
               ),
               const SizedBox(height: 16),
-              ...availableDocs.map((doc) => ListTile(
-                leading: Icon(Icons.description),
-                title: Text(doc['name'] ?? doc['documentType'] ?? 'Document'),
-                subtitle: doc['option'] != null ? Text(doc['option']) : null,
-                onTap: () {
-                  setState(() {
-                    _selectedDocuments[docType] = doc;
-                  });
-                  Navigator.pop(context);
-                },
-              )).toList(),
+              ...availableDocs
+                  .map((doc) => ListTile(
+                        leading: Icon(Icons.description),
+                        title: Text(
+                            doc['name'] ?? doc['documentType'] ?? 'Document'),
+                        subtitle:
+                            doc['option'] != null ? Text(doc['option']) : null,
+                        onTap: () {
+                          setState(() {
+                            _selectedDocuments[docType] = doc;
+                          });
+                          Navigator.pop(context);
+                        },
+                      ))
+                  .toList(),
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
@@ -1147,7 +1260,8 @@ class _BookingScreenState extends State<BookingScreen>
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppConfig.primaryColor,
                   ),
-                  child: Text('Upload New Document', style: TextStyle(color: Colors.white)),
+                  child: Text('Upload New Document',
+                      style: TextStyle(color: Colors.white)),
                 ),
               ),
             ],
@@ -1175,24 +1289,9 @@ class _BookingScreenState extends State<BookingScreen>
               ),
               const SizedBox(height: 16),
               Text(
-                'Please upload this document from your tenant profile first, then return to complete booking.',
+                'Please upload this document from your tenant profile first, then return to complete booking. or Select the Upload New Document Button to upload now.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey[600]),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    // Navigate to tenant profile
-                    Navigator.pushNamed(context, '/tenant-profile');
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppConfig.primaryColor,
-                  ),
-                  child: Text('Go to Profile', style: TextStyle(color: Colors.white)),
-                ),
               ),
             ],
           ),
@@ -1389,15 +1488,17 @@ class _BookingScreenState extends State<BookingScreen>
 
           // Document summary
           _buildReviewCard(
-            'ID Proof Document',
+            'Required Documents',
             [
-              _buildReviewItem('Document Type',
-                  _selectedDocument?['name'] ?? _selectedDocumentType),
-              _buildReviewItem(
-                  'Status',
-                  _selectedDocument != null
-                      ? 'Existing Document'
-                      : 'New Document'),
+              for (String docType in _selectedDocuments.keys)
+                _buildReviewItem(
+                  docType,
+                  _selectedDocuments[docType] != null
+                      ? (_selectedDocuments[docType]!['isUploaded'] == true
+                          ? 'Newly Uploaded'
+                          : 'Existing Document')
+                      : 'Not Selected',
+                ),
             ],
           ),
 
@@ -1413,6 +1514,12 @@ class _BookingScreenState extends State<BookingScreen>
                   _paymentCompleted ? 'Completed' : 'Pending'),
               if (_paymentId != null)
                 _buildReviewItem('Payment ID', _paymentId!),
+              if (_paymentCompletedAt != null)
+                _buildReviewItem(
+                    'Payment Time',
+                    DateFormat('MMM dd, yyyy HH:mm')
+                        .format(_paymentCompletedAt!)),
+              _buildReviewItem('Payment Method', 'Razorpay'),
             ],
           ),
 
@@ -1484,8 +1591,8 @@ class _BookingScreenState extends State<BookingScreen>
             child: _currentStep == 3 // Payment step
                 ? Container() // Hide Next button during payment step
                 : ElevatedButton(
-                    onPressed: _currentStep == _totalSteps - 1 
-                        ? _submitBooking 
+                    onPressed: _currentStep == _totalSteps - 1
+                        ? _submitBooking
                         : _nextStep,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppConfig.primaryColor,
@@ -1495,7 +1602,9 @@ class _BookingScreenState extends State<BookingScreen>
                       ),
                     ),
                     child: Text(
-                      _currentStep == _totalSteps - 1 ? 'Submit Booking' : 'Next',
+                      _currentStep == _totalSteps - 1
+                          ? 'Submit Booking'
+                          : 'Next',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,

@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:housinghub/Other/BookingDetailsScreen.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/Helper/BookingModels.dart';
-import 'package:shimmer/shimmer.dart';
+// shimmer removed along with old loading UI
 
 class TenantBookingsScreen extends StatefulWidget {
   const TenantBookingsScreen({Key? key}) : super(key: key);
@@ -19,6 +20,7 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
   late TabController _tabController;
   Stream<List<Map<String, dynamic>>>? _bookingsStream;
   String? _tenantEmail;
+  final NumberFormat _inr = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
 
   @override
   void initState() {
@@ -36,293 +38,111 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
   }
 
   @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  List<Map<String, dynamic>> _filterBookingsByStatus(
-    List<Map<String, dynamic>> bookings,
-    List<BookingStatus> statuses,
-  ) {
-    return bookings.where((booking) {
-      final statusStr = booking['status'] as String?;
-      if (statusStr == null) return false;
-
-      // Find matching enum by comparing with toFirestore() values
-      final status = BookingStatus.values.firstWhere(
-        (s) => s.toFirestore() == statusStr,
-        orElse: () => BookingStatus.pending,
-      );
-      return statuses.contains(status);
-    }).toList();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('My Bookings')),
+        body: const Center(child: Text('Please sign in to view your bookings')),
+      );
+    }
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-        title: const Text(
-          'My Bookings',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        title: const Text('My Bookings'),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: AppConfig.primaryColor,
-          unselectedLabelColor: Colors.grey[600],
-          indicatorColor: AppConfig.primaryColor,
-          indicatorWeight: 3,
           tabs: const [
-            Tab(text: 'Active'),
             Tab(text: 'Pending'),
+            Tab(text: 'Active'),
             Tab(text: 'History'),
           ],
         ),
       ),
-      body: _tenantEmail == null
-          ? _buildSignInPrompt()
-          : StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _bookingsStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return _buildShimmerLoading();
-                }
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: _bookingsStream,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+          final items = (snapshot.data ?? [])
+            ..sort((a, b) {
+              final ta = (a['createdAt'] as Timestamp?)?.toDate();
+              final tb = (b['createdAt'] as Timestamp?)?.toDate();
+              if (ta == null && tb == null) return 0;
+              if (ta == null) return 1;
+              if (tb == null) return -1;
+              return tb.compareTo(ta);
+            });
 
-                if (snapshot.hasError) {
-                  return _buildErrorWidget(snapshot.error.toString());
-                }
+          final pendingKey = BookingStatus.pending.toFirestore();
+          final acceptedKey = BookingStatus.accepted.toFirestore();
+          final completedKey = BookingStatus.completed.toFirestore();
+          final rejectedKey = BookingStatus.rejected.toFirestore();
 
-                final bookings = snapshot.data ?? [];
+          final pending = items.where((e) => e['status'] == pendingKey).toList();
+          final active = items.where((e) => e['status'] == acceptedKey).toList();
+          final history = items
+              .where((e) => e['status'] == completedKey || e['status'] == rejectedKey)
+              .toList();
 
-                if (bookings.isEmpty) {
-                  return _buildEmptyState();
-                }
-
-                return TabBarView(
-                  controller: _tabController,
-                  children: [
-                    // Active bookings (accepted)
-                    _buildBookingsList(
-                        _filterBookingsByStatus(
-                          bookings,
-                          [BookingStatus.accepted],
-                        ),
-                        'active'),
-
-                    // Pending bookings
-                    _buildBookingsList(
-                        _filterBookingsByStatus(
-                          bookings,
-                          [BookingStatus.pending],
-                        ),
-                        'pending'),
-
-                    // History (completed, rejected)
-                    _buildBookingsList(
-                        _filterBookingsByStatus(
-                          bookings,
-                          [BookingStatus.completed, BookingStatus.rejected],
-                        ),
-                        'history'),
-                  ],
-                );
-              },
-            ),
-    );
-  }
-
-  Widget _buildSignInPrompt() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.login,
-            size: 64,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Please sign in to view your bookings',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[600],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildShimmerLoading() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: 3,
-      itemBuilder: (context, index) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          child: Shimmer.fromColors(
-            baseColor: Colors.grey[300]!,
-            highlightColor: Colors.grey[100]!,
-            child: Container(
-              height: 180,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildErrorWidget(String error) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 64,
-            color: Colors.red[300],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Error loading bookings',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[800],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            error,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _initializeBookings();
-              });
-            },
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.bookmark_border,
-            size: 64,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No bookings yet',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[800],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Your property bookings will appear here',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[600],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBookingsList(List<Map<String, dynamic>> bookings, String type) {
-    if (bookings.isEmpty) {
-      String message;
-      IconData icon;
-
-      switch (type) {
-        case 'active':
-          message = 'No active bookings';
-          icon = Icons.home_outlined;
-          break;
-        case 'pending':
-          message = 'No pending bookings';
-          icon = Icons.schedule_outlined;
-          break;
-        case 'history':
-          message = 'No booking history';
-          icon = Icons.history_outlined;
-          break;
-        default:
-          message = 'No bookings found';
-          icon = Icons.bookmark_border;
-      }
-
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 48,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: () async {
-        setState(() {
-          _initializeBookings();
-        });
-      },
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: bookings.length,
-        itemBuilder: (context, index) {
-          final booking = bookings[index];
-          return _buildBookingCard(booking);
+          return TabBarView(
+            controller: _tabController,
+            children: [
+              _buildBookingsList(pending),
+              _buildBookingsList(active),
+              _buildBookingsList(history),
+            ],
+          );
         },
       ),
     );
+  }
+
+  Widget _buildBookingsList(List<Map<String, dynamic>> bookings) {
+    if (bookings.isEmpty) {
+      return const Center(child: Text('No bookings found'));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: bookings.length,
+      itemBuilder: (context, index) {
+        final booking = bookings[index];
+        return _buildBookingCard(booking);
+      },
+    );
+  }
+
+  // Helpers to compute amounts consistently
+  static double _parsePrice(dynamic price) {
+    if (price == null) return 0;
+    if (price is num) return price.toDouble();
+    final s = price.toString().replaceAll(RegExp(r'[^0-9.]'), '');
+    if (s.isEmpty) return 0;
+    return double.tryParse(s) ?? 0;
+  }
+
+  double _extractTotalAmount(Map<String, dynamic> bookingData) {
+    // Prefer explicit booking amount if set, else compute from property data, else payment amount
+    final amount = bookingData['amount'];
+    if (amount != null) {
+      final a = _parsePrice(amount);
+      if (a > 0) return a;
+    }
+    final propertyData = bookingData['propertyData'] ?? {};
+    final rent = _parsePrice(propertyData['rent'] ?? propertyData['price'] ?? propertyData['monthlyRent']);
+    final deposit = _parsePrice(propertyData['deposit'] ?? propertyData['securityDeposit']);
+    final computed = rent + deposit;
+    if (computed > 0) return computed;
+    final paymentInfo = bookingData['paymentInfo'];
+    if (paymentInfo != null) {
+      final paid = _parsePrice(paymentInfo['amount']);
+      if (paid > 0) return paid;
+    }
+    return 0;
   }
 
   Widget _buildBookingCard(Map<String, dynamic> bookingData) {
@@ -334,7 +154,7 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
 
     final checkInDate = bookingData['checkInDate'] as Timestamp?;
     final createdAt = bookingData['createdAt'] as Timestamp?;
-    final amount = bookingData['amount'] as double? ?? 0.0;
+    final amount = _extractTotalAmount(bookingData);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -431,7 +251,7 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
                     Expanded(
                       child: _buildInfoItem(
                         'Amount',
-                        '₹${amount.toStringAsFixed(0)}',
+                        _inr.format(amount),
                         Icons.payments,
                       ),
                     ),
@@ -597,12 +417,18 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
     return Row(children: buttons);
   }
 
+  // Receipt URL adjustments now handled in BookingDetailsScreen
+
+  // Receipt download now handled inside BookingDetailsScreen
+
   void _showBookingDetails(Map<String, dynamic> bookingData) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _BookingDetailsModal(bookingData: bookingData),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BookingDetailsScreen(
+          bookingData: bookingData,
+          viewer: 'tenant',
+        ),
+      ),
     );
   }
 
@@ -670,202 +496,4 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
   }
 }
 
-class _BookingDetailsModal extends StatelessWidget {
-  final Map<String, dynamic> bookingData;
-
-  const _BookingDetailsModal({required this.bookingData});
-
-  @override
-  Widget build(BuildContext context) {
-    final propertyData = bookingData['propertyData'] ?? {};
-    final status = BookingStatus.values.firstWhere(
-      (s) => s.toFirestore() == bookingData['status'],
-      orElse: () => BookingStatus.pending,
-    );
-
-    final checkInDate = bookingData['checkInDate'] as Timestamp?;
-    final createdAt = bookingData['createdAt'] as Timestamp?;
-    final amount = bookingData['amount'] as double? ?? 0.0;
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      maxChildSize: 0.9,
-      minChildSize: 0.5,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              // Handle bar
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-
-              // Title
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Booking Details',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-
-              const Divider(),
-
-              // Content
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    // Status
-                    _buildDetailSection('Status', [
-                      _buildDetailRow('Current Status', status.displayName),
-                      if (createdAt != null)
-                        _buildDetailRow(
-                            'Booked on',
-                            DateFormat('MMM dd, yyyy - hh:mm a')
-                                .format(createdAt.toDate())),
-                    ]),
-
-                    const SizedBox(height: 16),
-
-                    // Property Details
-                    _buildDetailSection('Property Details', [
-                      _buildDetailRow('Title', propertyData['title'] ?? 'N/A'),
-                      _buildDetailRow(
-                          'Address', propertyData['address'] ?? 'N/A'),
-                      _buildDetailRow('Type',
-                          '${propertyData['roomType'] ?? ''} ${propertyData['propertyType'] ?? ''}'),
-                      _buildDetailRow('Monthly Rent',
-                          '₹${propertyData['monthlyRent']?.toStringAsFixed(0) ?? 'N/A'}'),
-                      _buildDetailRow('Security Deposit',
-                          '₹${propertyData['securityDeposit']?.toStringAsFixed(0) ?? 'N/A'}'),
-                    ]),
-
-                    const SizedBox(height: 16),
-
-                    // Booking Details
-                    _buildDetailSection('Booking Information', [
-                      if (checkInDate != null)
-                        _buildDetailRow(
-                            'Check-in Date',
-                            DateFormat('MMM dd, yyyy')
-                                .format(checkInDate.toDate())),
-                      _buildDetailRow(
-                          'Total Amount', '₹${amount.toStringAsFixed(0)}'),
-                      if (bookingData['notes'] != null &&
-                          bookingData['notes'].isNotEmpty)
-                        _buildDetailRow('Notes', bookingData['notes']),
-                    ]),
-
-                    const SizedBox(height: 16),
-
-                    // Owner Information
-                    if (bookingData['ownerEmail'] != null)
-                      _buildDetailSection('Owner Information', [
-                        _buildDetailRow('Email', bookingData['ownerEmail']),
-                      ]),
-
-                    const SizedBox(height: 16),
-
-                    // Payment Information
-                    if (bookingData['paymentInfo'] != null)
-                      _buildDetailSection('Payment Information', [
-                        _buildDetailRow('Payment ID',
-                            bookingData['paymentInfo']['paymentId'] ?? 'N/A'),
-                        _buildDetailRow('Method',
-                            bookingData['paymentInfo']['method'] ?? 'N/A'),
-                        _buildDetailRow('Status',
-                            bookingData['paymentInfo']['status'] ?? 'N/A'),
-                      ]),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildDetailSection(String title, List<Widget> children) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey[200]!),
-          ),
-          child: Column(
-            children: children,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// Legacy modal removed; details handled by BookingDetailsScreen

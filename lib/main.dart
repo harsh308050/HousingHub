@@ -48,7 +48,7 @@ class _MyAppState extends State<MyApp> {
         'LoginScreen': (context) => LoginScreen(),
         'OwnerHomeScreen': (context) => OwnerHomeScreen(),
         'TenantHomeScreen': (context) => TenantHomeScreen(),
-        'NotificationScreen': (context) => NotificationScreen(),
+        'NotificationScreen': (context) => NotificationScreen()
       },
     );
   }
