@@ -70,6 +70,7 @@ class _AddPropertyState extends State<AddProperty> {
     _pincodeController.dispose();
     _otherPropertyTypeController.dispose();
     _priceController.dispose();
+    _securityDepositController.dispose();
     _searchDebouncer?.cancel();
     super.dispose();
   }
@@ -639,6 +640,8 @@ class _AddPropertyState extends State<AddProperty> {
 
   // Property details variables
   final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _securityDepositController =
+      TextEditingController();
   bool _isMaleAllowed = false;
   bool _isFemaleAllowed = false;
   String? _selectedRoomType;
@@ -649,6 +652,14 @@ class _AddPropertyState extends State<AddProperty> {
     '3BHK',
     '4BHK',
     'Studio'
+  ];
+
+  String? _selectedMinimumBookingPeriod;
+  final List<String> _bookingPeriods = [
+    '1 Month',
+    '3 Months',
+    '6 Months',
+    '12 Months'
   ];
 
   final Map<String, bool> _amenities = {
@@ -716,6 +727,98 @@ class _AddPropertyState extends State<AddProperty> {
                 }
                 if (int.tryParse(value) == null) {
                   return 'Please enter a valid number';
+                }
+                return null;
+              },
+            ),
+            SizedBox(height: 24),
+
+            // Security Deposit
+            Text(
+              'Security Deposit',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[800],
+              ),
+            ),
+            SizedBox(height: 8),
+            TextFormField(
+              controller: _securityDepositController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                hintText: 'Enter security deposit',
+                suffixText: '₹',
+                filled: true,
+                fillColor: Colors.grey[50],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: AppConfig.primaryColor),
+                ),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please enter security deposit';
+                }
+                if (int.tryParse(value) == null) {
+                  return 'Please enter a valid number';
+                }
+                return null;
+              },
+            ),
+            SizedBox(height: 24),
+
+            // Minimum Booking Period
+            Text(
+              'Minimum Booking Period',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[800],
+              ),
+            ),
+            SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _selectedMinimumBookingPeriod,
+              decoration: InputDecoration(
+                hintText: 'Select minimum booking period',
+                filled: true,
+                fillColor: Colors.grey[50],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: AppConfig.primaryColor),
+                ),
+              ),
+              items: _bookingPeriods.map((String period) {
+                return DropdownMenuItem(
+                  value: period,
+                  child: Text(period),
+                );
+              }).toList(),
+              onChanged: (String? newValue) {
+                setState(() {
+                  _selectedMinimumBookingPeriod = newValue;
+                });
+              },
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please select minimum booking period';
                 }
                 return null;
               },
@@ -1308,6 +1411,8 @@ class _AddPropertyState extends State<AddProperty> {
           'bathrooms': _bathrooms,
           'squareFootage': int.parse(_squareFootageController.text),
           'price': int.parse(_priceController.text),
+          'securityDeposit': int.parse(_securityDepositController.text),
+          'minimumBookingPeriod': _selectedMinimumBookingPeriod,
           'address': _addressController.text,
           'city': _cityController.text,
           'state': _stateController.text,
@@ -1326,12 +1431,6 @@ class _AddPropertyState extends State<AddProperty> {
         print('Property data map created');
 
         try {
-          // Use the API to add the property
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('Uploading media and saving property data...')),
-          );
-
           String propertyId = await Api.addProperty(
               propertyData, propertyImages, propertyVideo);
 

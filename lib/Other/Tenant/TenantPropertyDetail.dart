@@ -9,6 +9,7 @@ import 'package:housinghub/Helper/API.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../Chat/ChatScreen.dart';
+import 'BookingScreen.dart';
 
 class TenantPropertyDetail extends StatefulWidget {
   final String? propertyId;
@@ -265,10 +266,11 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
         '$address, $city, $state ${pincode.isNotEmpty ? '- $pincode' : ''}';
     final squareFootage =
         widget.propertyData?['squareFootage']?.toString() ?? 'Not specified';
-    final bedrooms = widget.propertyData?['bedrooms']?.toString() ?? '2';
+    final bedrooms = widget.propertyData?['bedrooms']?.toString() ?? '1';
     final bathrooms = widget.propertyData?['bathrooms']?.toString() ?? '1';
     final description =
         widget.propertyData?['description'] ?? 'No description available';
+
     final ownerEmail = widget.propertyData?['ownerEmail'] ?? '';
     final createdAt = widget.propertyData?['createdAt'] != null
         ? _formatCreatedAt(widget.propertyData!['createdAt'])
@@ -737,7 +739,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                 children: [
                   // Chat Now button
                   Expanded(
-                    child: ElevatedButton(
+                    child: OutlinedButton(
                       onPressed: () {
                         final me = FirebaseAuth.instance.currentUser?.email;
                         final ownerEmail =
@@ -764,9 +766,9 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                           ),
                         );
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.blue,
+                        side: BorderSide(color: Colors.blue),
                         padding: EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -778,19 +780,17 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                       ),
                     ),
                   ),
+
                   SizedBox(width: 12),
+
                   // Book Now button
                   Expanded(
+                    flex: 2,
                     child: ElevatedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content:
-                                Text('Booking functionality coming soon')));
-                      },
+                      onPressed: () => _navigateToBooking(),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: AppConfig.primaryColor,
-                        side: BorderSide(color: AppConfig.primaryColor),
+                        backgroundColor: AppConfig.primaryColor,
+                        foregroundColor: Colors.white,
                         padding: EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -798,7 +798,10 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                       ),
                       child: Text(
                         'Book Now',
-                        style: TextStyle(fontSize: 16),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -855,6 +858,13 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
         _buildDetailRow('Bedrooms', bedrooms),
         _buildDetailRow('Bathrooms', bathrooms),
         _buildDetailRow('Square Footage', '$squareFootage sq.ft'),
+        _buildDetailRow(
+            'Security Deposit',
+            widget.propertyData?['securityDeposit'] != null
+                ? '₹${widget.propertyData!['securityDeposit']}'
+                : 'Not specified'),
+        _buildDetailRow('Minimum Booking Period',
+            widget.propertyData?['minimumBookingPeriod'] ?? 'Not specified'),
       ],
     );
   }
@@ -1257,6 +1267,51 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
         setState(() => _isSaved = wasSaved); // revert
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error updating saved property: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _navigateToBooking() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user?.email == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please sign in to book this property')),
+      );
+      return;
+    }
+
+    // Validate required property data
+    if (widget.propertyData == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Property information is incomplete')),
+      );
+      return;
+    }
+
+    try {
+      final result = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BookingScreen(
+            propertyData: widget.propertyData!,
+          ),
+        ),
+      );
+
+      // If booking was successful, show confirmation
+      if (result == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Booking request submitted successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error opening booking: $e')),
         );
       }
     }

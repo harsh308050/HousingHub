@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../config/AppConfig.dart';
 import '/Helper/API.dart';
+import 'TenantBookingsScreen.dart';
 
 class TenantProfileTab extends StatefulWidget {
   final User? user;
@@ -75,21 +76,6 @@ class _TenantProfileTabState extends State<TenantProfileTab>
     }
   }
 
-  // Sign out
-  Future<void> _signOut() async {
-    try {
-      await Api.signOut();
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, 'LoginScreen');
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error signing out: $e')),
-      );
-    }
-  }
-
   @override
   void dispose() {
     _tabController.dispose();
@@ -109,7 +95,7 @@ class _TenantProfileTabState extends State<TenantProfileTab>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _BookingsTab(onSignOut: _signOut),
+                  _BookingsTab(),
                   _DocumentsTab(email: email),
                   _PreferencesTab(
                     formKey: _formKey,
@@ -238,8 +224,7 @@ class _TenantProfileTabState extends State<TenantProfileTab>
           SizedBox(
               width: 120,
               child: Tab(
-                  icon: Icon(Icons.event_available, size: 20),
-                  text: 'Bookings')),
+                  icon: Icon(Icons.book_outlined, size: 20), text: 'Bookings')),
           SizedBox(
               width: 120,
               child: Tab(
@@ -311,144 +296,6 @@ class _TenantProfileTabState extends State<TenantProfileTab>
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Failed to save: $e')));
     }
-  }
-}
-
-// ============ Bookings Tab (UI placeholder like the shared mock) ============
-class _BookingsTab extends StatelessWidget {
-  final Future<void> Function() onSignOut;
-  const _BookingsTab({required this.onSignOut});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _Section(
-                  title: 'My Bookings',
-                  trailing: TextButton(
-                    onPressed: () {},
-                    child: const Text('View All'),
-                  ),
-                ),
-                _BookingCard(),
-                const SizedBox(height: 20),
-                _Section(title: 'Help & Support'),
-                _ListTileCard(
-                  leading: const Icon(Icons.support_agent_outlined,
-                      color: Colors.black87),
-                  title: 'Contact Support',
-                  onTap: () {},
-                ),
-                SizedBox(
-                  height: 15,
-                ),
-                GestureDetector(
-                  onTap: onSignOut,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.logout, color: Colors.red, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'Log Out',
-                          style: TextStyle(
-                            color: Colors.red,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _BookingCard extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          )
-        ],
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.network(
-              'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=120&q=80',
-              width: 64,
-              height: 64,
-              fit: BoxFit.cover,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  'Luxury Beach Resort',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Mar 15 - Mar 20, 2024',
-                  style: TextStyle(fontSize: 13, color: Colors.black87),
-                ),
-                SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: _StatusChip(
-                    label: 'Upcoming',
-                    color: Color(0xFF1976D2),
-                  ),
-                )
-              ],
-            ),
-          )
-        ],
-      ),
-    );
   }
 }
 
@@ -885,8 +732,7 @@ class _PreferencesTabState extends State<_PreferencesTab> {
 // ============ Shared small widgets ============
 class _Section extends StatelessWidget {
   final String title;
-  final Widget? trailing;
-  const _Section({required this.title, this.trailing});
+  const _Section({required this.title});
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -894,7 +740,6 @@ class _Section extends StatelessWidget {
         Text(title,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const Spacer(),
-        if (trailing != null) trailing!,
       ],
     );
   }
@@ -931,6 +776,197 @@ class _StatusChip extends StatelessWidget {
         label,
         style:
             TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
+      ),
+    );
+  }
+}
+
+class _BookingsTab extends StatelessWidget {
+  const _BookingsTab();
+
+  @override
+  Widget build(BuildContext context) {
+    Future<void> _signOut() async {
+      try {
+        await Api.signOut();
+
+        Navigator.pushReplacementNamed(context, 'LoginScreen');
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error signing out: $e')),
+        );
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          // Header
+          Row(
+            children: [
+              const Icon(Icons.book_outlined, size: 24),
+              const SizedBox(width: 12),
+              const Text(
+                'My Bookings',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // Quick stats cards
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatCard(
+                  'Active',
+                  '0',
+                  Icons.home_outlined,
+                  Colors.green,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildStatCard(
+                  'Pending',
+                  '0',
+                  Icons.schedule_outlined,
+                  Colors.orange,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildStatCard(
+                  'Total',
+                  '0',
+                  Icons.book_outlined,
+                  AppConfig.primaryColor,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
+          // View All Bookings Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const TenantBookingsScreen(),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppConfig.primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'View All Bookings',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+          _Section(title: 'Help & Support'),
+          _ListTileCard(
+            leading:
+                const Icon(Icons.support_agent_outlined, color: Colors.black87),
+            title: 'Contact Support',
+            onTap: () {},
+          ),
+          SizedBox(height: 8),
+          // Quick actions
+          GestureDetector(
+            onTap: _signOut,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.logout, color: Colors.red, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Log Out',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(
+      String title, String count, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            count,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -6,6 +6,7 @@ import 'package:housinghub/Other/Owner/OwnerProfileTab.dart';
 import 'package:housinghub/Other/Owner/AddProperty.dart';
 import 'OwnerChatTab.dart';
 import 'OwnerPropertyTab.dart';
+import 'OwnerBookingsScreen.dart';
 
 class OwnerHomeScreen extends StatefulWidget {
   const OwnerHomeScreen({super.key});
@@ -21,11 +22,12 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen>
       _screens; // Use 'late' for deferred initialization
   User? _currentUser;
   Map<String, dynamic>? _ownerData;
+  Stream<int>? _pendingBookingsStream;
 
   // Function to change the selected index
   void _onProfileTapped() {
     setState(() {
-      _selectedIndex = 3; // Index for Profile tab
+      _selectedIndex = 4; // Index for Profile tab
     });
   }
 
@@ -37,7 +39,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen>
 
   void _onChatTapped() {
     setState(() {
-      _selectedIndex = 2; // Index for Property tab
+      _selectedIndex = 3; // Index for Chat tab
     });
   }
 
@@ -50,6 +52,8 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen>
     // Update user presence when app starts
     if (_currentUser?.email != null) {
       Api.updateUserPresence(_currentUser!.email!);
+      _pendingBookingsStream =
+          Api.streamPendingBookingsCount(_currentUser!.email!);
     }
 
     // Fetch user data from Firestore
@@ -61,9 +65,11 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen>
           onProfileTapped: _onProfileTapped,
           onPropertyTapped: _onPropertyTapped,
           onChatTapped: _onChatTapped,
+          onBookingsTapped: () => setState(() => _selectedIndex = 2),
           user: _currentUser,
           ownerData: _ownerData),
       (context) => OwnerPropertyTab(),
+      (context) => OwnerBookingsScreen(),
       (context) => OwnerChatTab(),
       (context) => OwnerProfileTab(user: _currentUser, ownerData: _ownerData),
     ];
@@ -84,9 +90,11 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen>
                   onProfileTapped: _onProfileTapped,
                   onPropertyTapped: _onPropertyTapped,
                   onChatTapped: _onChatTapped,
+                  onBookingsTapped: () => setState(() => _selectedIndex = 2),
                   user: _currentUser,
                   ownerData: _ownerData),
               (context) => OwnerPropertyTab(),
+              (context) => OwnerBookingsScreen(),
               (context) => OwnerChatTab(),
               (context) =>
                   OwnerProfileTab(user: _currentUser, ownerData: _ownerData),
@@ -140,40 +148,93 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen>
   }
 
   Widget _buildBottomNavigationBar() {
-    return BottomNavigationBar(
-      currentIndex: _selectedIndex,
-      onTap: (index) {
-        setState(() {
-          _selectedIndex = index;
-        });
+    return StreamBuilder<int>(
+      stream: _pendingBookingsStream,
+      builder: (context, snapshot) {
+        final pendingCount = snapshot.data ?? 0;
+
+        return BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+          selectedItemColor: AppConfig.primaryColor,
+          unselectedItemColor: Colors.grey,
+          showUnselectedLabels: false,
+          type: BottomNavigationBarType.fixed,
+          items: [
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.business_outlined),
+              activeIcon: Icon(Icons.business_rounded),
+              label: 'Properties',
+            ),
+            BottomNavigationBarItem(
+              icon: _buildBookingTabIcon(pendingCount, false),
+              activeIcon: _buildBookingTabIcon(pendingCount, true),
+              label: 'Bookings',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.chat_outlined),
+              activeIcon: Icon(Icons.chat_rounded),
+              label: 'Messages',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              activeIcon: Icon(Icons.person),
+              label: 'Profile',
+            ),
+          ],
+        );
       },
-      selectedItemColor: AppConfig.primaryColor,
-      unselectedItemColor: Colors.grey,
-      showUnselectedLabels: false,
-      type: BottomNavigationBarType.fixed,
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home_outlined),
-          activeIcon: Icon(Icons.home),
-          label: 'Home',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.business_outlined),
-          activeIcon: Icon(Icons.business_rounded),
-          label: 'Properties',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.chat_outlined),
-          activeIcon: Icon(Icons.chat_rounded),
-          label: 'Messages',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline),
-          activeIcon: Icon(Icons.person),
-          label: 'Profile',
-        ),
-      ],
     );
+  }
+
+  Widget _buildBookingTabIcon(int pendingCount, bool isActive) {
+    final icon = Icon(
+      isActive ? Icons.bookmark : Icons.bookmark_outline,
+      color: isActive ? AppConfig.primaryColor : Colors.grey,
+    );
+
+    if (pendingCount > 0) {
+      return Stack(
+        children: [
+          icon,
+          Positioned(
+            right: 0,
+            top: 0,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 16,
+                minHeight: 16,
+              ),
+              child: Text(
+                pendingCount > 99 ? '99+' : pendingCount.toString(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return icon;
   }
 }
 
@@ -181,6 +242,7 @@ class HomeTab extends StatefulWidget {
   final VoidCallback onProfileTapped;
   final VoidCallback onPropertyTapped;
   final VoidCallback onChatTapped;
+  final VoidCallback onBookingsTapped;
   final User? user;
   final Map<String, dynamic>? ownerData;
 
@@ -189,6 +251,7 @@ class HomeTab extends StatefulWidget {
       required this.onProfileTapped,
       required this.onPropertyTapped,
       required this.onChatTapped,
+      required this.onBookingsTapped,
       this.user,
       this.ownerData});
 
@@ -395,13 +458,24 @@ class _HomeTabState extends State<HomeTab> {
                     ),
                   ),
                   SizedBox(width: 12),
-                  // Pending Requests Card (Dummy data)
+                  // Pending Booking Requests Card
                   Expanded(
-                    child: _buildStatsCard(
-                      icon: Icons.assignment_outlined,
-                      iconColor: Colors.blue,
-                      value: '3',
-                      label: 'Pending Requests',
+                    child: StreamBuilder<int>(
+                      stream: widget.user?.email != null
+                          ? Api.streamPendingBookingsCount(widget.user!.email!)
+                          : Stream.value(0),
+                      builder: (context, snapshot) {
+                        final pendingCount = snapshot.data ?? 0;
+                        return InkWell(
+                          onTap: widget.onBookingsTapped,
+                          child: _buildStatsCard(
+                            icon: Icons.assignment_outlined,
+                            iconColor: Colors.blue,
+                            value: pendingCount.toString(),
+                            label: 'Pending Requests',
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],

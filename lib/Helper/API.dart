@@ -36,6 +36,8 @@ class Property {
   final double? latitude;
   final double? longitude;
   final DateTime? createdAt;
+  final int? securityDeposit;
+  final String? minimumBookingPeriod;
 
   Property({
     required this.id,
@@ -63,6 +65,8 @@ class Property {
     this.latitude,
     this.longitude,
     this.createdAt,
+    this.securityDeposit,
+    this.minimumBookingPeriod,
   });
 
   // Get primary image URL (first in list or default)
@@ -164,6 +168,10 @@ class Property {
           ? (data['longitude'] as num).toDouble()
           : null,
       createdAt: createdAt,
+      securityDeposit: data['securityDeposit'] is num
+          ? (data['securityDeposit'] as num).toInt()
+          : null,
+      minimumBookingPeriod: data['minimumBookingPeriod'] as String?,
     );
   }
 
@@ -198,6 +206,8 @@ class Property {
       'latitude': latitude,
       'longitude': longitude,
       'createdAt': createdAt?.toIso8601String(), // Convert DateTime to string
+      'securityDeposit': securityDeposit,
+      'minimumBookingPeriod': minimumBookingPeriod,
     };
   }
 }
@@ -2779,19 +2789,16 @@ class Api {
   // Get notifications for a user
   static Stream<QuerySnapshot<Map<String, dynamic>>> getNotificationsStream(
       String userEmail) {
+    // Simplified query without orderBy to avoid composite index requirement
     return _firestore
         .collection('Notifications')
         .where('receiverEmail', isEqualTo: userEmail)
-        .orderBy('timestamp', descending: true)
+        .limit(100) // Reasonable limit to prevent excessive data loading
         .snapshots()
         .handleError((error) {
       print('Error in notification stream: $error');
-      // If composite index error, fall back to unordered query
-      if (error.toString().contains('FAILED_PRECONDITION') ||
-          error.toString().contains('index')) {
-        return getNotificationsStreamFallback(userEmail);
-      }
-      throw error;
+      // If any error occurs, fall back to basic query
+      return getNotificationsStreamFallback(userEmail);
     });
   }
 
@@ -2849,7 +2856,574 @@ class Api {
     }
   }
 
-  // Get unread notification count stream
+  // =============================
+  // BOOKING MANAGEMENT METHODS
+  // =============================
+
+  // Import booking models
+  // Note: Add this import at the top of the file
+  // import 'package:housinghub/Helper/BookingModels.dart';
+
+  // Create a new booking request
+  static Future<String> createBooking({
+    required String tenantEmail,
+    required String ownerEmail,
+    required String propertyId,
+    required Map<String, dynamic> propertyData,
+    required Map<String, dynamic> tenantData,
+    required Map<String, dynamic> idProof,
+    required DateTime checkInDate,
+    required double amount,
+    String? notes,
+  }) async {
+    try {
+      final bookingId = const Uuid().v4();
+
+      final bookingData = {
+        'bookingId': bookingId,
+        'tenantEmail': tenantEmail,
+        'ownerEmail': ownerEmail,
+        'propertyId': propertyId,
+        'propertyData': propertyData,
+        'tenantData': tenantData,
+        'idProof': idProof,
+        'status': 'Pending',
+        'paymentInfo': {
+          'amount': amount,
+          'status': 'Pending',
+          'currency': 'INR',
+          'paymentMethod': 'Razorpay',
+        },
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'checkInDate': Timestamp.fromDate(checkInDate),
+        'notes': notes,
+      };
+
+      // Store in tenant's bookings collection
+      await _firestore
+          .collection('Tenants')
+          .doc(tenantEmail)
+          .collection('Bookings')
+          .doc(bookingId)
+          .set(bookingData);
+
+      // Store in owner's bookings collection
+      await _firestore
+          .collection('Owners')
+          .doc(ownerEmail)
+          .collection('Bookings')
+          .doc(bookingId)
+          .set(bookingData);
+
+      // Store in central bookings collection
+      await _firestore.collection('Bookings').doc(bookingId).set(bookingData);
+
+      // Create notification for owner
+      await createBookingNotification(
+        recipientEmail: ownerEmail,
+        type: 'booking_request',
+        message:
+            'New booking request from ${tenantData['firstName']} ${tenantData['lastName']} for ${propertyData['title']}',
+        bookingId: bookingId,
+      );
+
+      print('Booking created successfully with ID: $bookingId');
+      return bookingId;
+    } catch (e) {
+      print('Error creating booking: $e');
+      throw Exception('Failed to create booking: $e');
+    }
+  }
+
+  // Update booking status (approve/reject)
+  static Future<void> updateBookingStatus({
+    required String bookingId,
+    required String tenantEmail,
+    required String ownerEmail,
+    required String newStatus,
+    String? rejectionReason,
+    Map<String, dynamic>? paymentInfo,
+  }) async {
+    try {
+      final updateData = {
+        'status': newStatus,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (rejectionReason != null) {
+        updateData['rejectionReason'] = rejectionReason;
+      }
+
+      if (paymentInfo != null) {
+        updateData['paymentInfo'] = paymentInfo;
+      }
+
+      // Get booking details first to access property information
+      final bookingDoc = await _firestore
+          .collection('Owners')
+          .doc(ownerEmail)
+          .collection('Bookings')
+          .doc(bookingId)
+          .get();
+
+      if (!bookingDoc.exists) {
+        throw Exception('Booking not found');
+      }
+
+      final bookingData = bookingDoc.data()!;
+      final propertyId = bookingData['propertyId'] as String?;
+
+      // Handle property availability changes when booking is approved
+      if (newStatus == 'Approved' && propertyId != null) {
+        // Mark property as unavailable since booking is approved
+        try {
+          await markPropertyAsUnavailable(propertyId);
+          print(
+              'Property $propertyId marked as unavailable after booking approval');
+
+          // Cancel all other pending bookings for this property
+          await _cancelOtherPendingBookingsForProperty(
+              propertyId, bookingId, ownerEmail);
+        } catch (e) {
+          print('Warning: Could not update property availability: $e');
+          // Don't fail the entire booking update if property update fails
+        }
+      }
+
+      // Handle property availability changes when booking is rejected/cancelled
+      else if ((newStatus == 'Rejected' || newStatus == 'Cancelled') &&
+          propertyId != null) {
+        // Property should remain available for other bookings
+        // We don't need to do anything here as property should already be available
+        print('Booking $newStatus - property $propertyId remains available');
+      }
+
+      // Handle property availability when booking is completed or tenant moves out
+      else if ((newStatus == 'Completed' || newStatus == 'CheckedOut') &&
+          propertyId != null) {
+        // Mark property as available again
+        try {
+          await markPropertyAsAvailable(propertyId);
+          print(
+              'Property $propertyId marked as available after booking completion');
+        } catch (e) {
+          print(
+              'Warning: Could not update property availability after completion: $e');
+          // Don't fail the entire booking update
+        }
+      }
+
+      // Update in tenant's collection
+      await _firestore
+          .collection('Tenants')
+          .doc(tenantEmail)
+          .collection('Bookings')
+          .doc(bookingId)
+          .update(updateData);
+
+      // Update in owner's collection
+      await _firestore
+          .collection('Owners')
+          .doc(ownerEmail)
+          .collection('Bookings')
+          .doc(bookingId)
+          .update(updateData);
+
+      // Update in central collection
+      await _firestore.collection('Bookings').doc(bookingId).update(updateData);
+
+      // Create notification for tenant
+      String notificationMessage;
+      String notificationType;
+
+      switch (newStatus) {
+        case 'Approved':
+          notificationMessage = 'Your booking request has been approved!';
+          notificationType = 'booking_approved';
+          break;
+        case 'Rejected':
+          notificationMessage =
+              'Your booking request has been rejected. ${rejectionReason ?? ''}';
+          notificationType = 'booking_rejected';
+          break;
+        case 'CheckedIn':
+          notificationMessage =
+              'You have successfully checked in to your property.';
+          notificationType = 'booking_checkin';
+          break;
+        case 'CheckedOut':
+          notificationMessage =
+              'You have successfully checked out from your property.';
+          notificationType = 'booking_checkout';
+          break;
+        default:
+          notificationMessage =
+              'Your booking status has been updated to $newStatus';
+          notificationType = 'booking_status_update';
+      }
+
+      await createBookingNotification(
+        recipientEmail: tenantEmail,
+        type: notificationType,
+        message: notificationMessage,
+        bookingId: bookingId,
+      );
+
+      print('Booking status updated successfully: $bookingId -> $newStatus');
+    } catch (e) {
+      print('Error updating booking status: $e');
+      throw Exception('Failed to update booking status: $e');
+    }
+  }
+
+  // Cancel other pending bookings for the same property when one is approved
+  static Future<void> _cancelOtherPendingBookingsForProperty(
+      String propertyId, String approvedBookingId, String ownerEmail) async {
+    try {
+      // Get all pending bookings for this property from owner's collection
+      final pendingBookingsQuery = await _firestore
+          .collection('Owners')
+          .doc(ownerEmail)
+          .collection('Bookings')
+          .where('propertyId', isEqualTo: propertyId)
+          .where('status', whereIn: ['Pending']).get();
+
+      // Cancel each pending booking except the approved one
+      for (final doc in pendingBookingsQuery.docs) {
+        if (doc.id != approvedBookingId) {
+          final bookingData = doc.data();
+          final tenantEmail = bookingData['tenantEmail'] as String;
+
+          // Update status to cancelled with reason
+          await updateBookingStatus(
+            bookingId: doc.id,
+            tenantEmail: tenantEmail,
+            ownerEmail: ownerEmail,
+            newStatus: 'Cancelled',
+            rejectionReason: 'Property has been booked by another tenant',
+          );
+
+          print('Auto-cancelled booking ${doc.id} for property $propertyId');
+        }
+      }
+    } catch (e) {
+      print('Error cancelling other pending bookings: $e');
+      // Don't throw error as this is a cleanup operation
+    }
+  }
+
+  // Get tenant bookings
+  static Future<List<Map<String, dynamic>>> getTenantBookings(
+      String tenantEmail) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('Tenants')
+          .doc(tenantEmail)
+          .collection('Bookings')
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      return querySnapshot.docs
+          .map((doc) => {
+                ...doc.data(),
+                'id': doc.id,
+              })
+          .toList();
+    } catch (e) {
+      print('Error fetching tenant bookings: $e');
+      throw Exception('Failed to fetch tenant bookings: $e');
+    }
+  }
+
+  // Get owner bookings
+  static Future<List<Map<String, dynamic>>> getOwnerBookings(
+      String ownerEmail) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('Owners')
+          .doc(ownerEmail)
+          .collection('Bookings')
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      return querySnapshot.docs
+          .map((doc) => {
+                ...doc.data(),
+                'id': doc.id,
+              })
+          .toList();
+    } catch (e) {
+      print('Error fetching owner bookings: $e');
+      throw Exception('Failed to fetch owner bookings: $e');
+    }
+  }
+
+  // Get pending bookings for owner
+  static Future<List<Map<String, dynamic>>> getPendingBookingsForOwner(
+      String ownerEmail) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('Owners')
+          .doc(ownerEmail)
+          .collection('Bookings')
+          .where('status', isEqualTo: 'Pending')
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      return querySnapshot.docs
+          .map((doc) => {
+                ...doc.data(),
+                'id': doc.id,
+              })
+          .toList();
+    } catch (e) {
+      print('Error fetching pending bookings: $e');
+      throw Exception('Failed to fetch pending bookings: $e');
+    }
+  }
+
+  // Stream tenant bookings (raw QuerySnapshot)
+  static Stream<QuerySnapshot> streamTenantBookingsRaw(String tenantEmail) {
+    return _firestore
+        .collection('Tenants')
+        .doc(tenantEmail)
+        .collection('Bookings')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  // Stream owner bookings (raw QuerySnapshot)
+  static Stream<QuerySnapshot> streamOwnerBookingsRaw(String ownerEmail) {
+    return _firestore
+        .collection('Owners')
+        .doc(ownerEmail)
+        .collection('Bookings')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  // Stream pending bookings for owner
+  static Stream<QuerySnapshot> streamPendingBookingsForOwner(
+      String ownerEmail) {
+    return _firestore
+        .collection('Owners')
+        .doc(ownerEmail)
+        .collection('Bookings')
+        .where('status', isEqualTo: 'Pending')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  // Stream tenant bookings with processed data
+  static Stream<List<Map<String, dynamic>>> streamTenantBookings(
+      String tenantEmail) {
+    return _firestore
+        .collection('Tenants')
+        .doc(tenantEmail)
+        .collection('Bookings')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['bookingId'] = doc.id;
+        return data;
+      }).toList();
+    });
+  }
+
+  // Stream owner bookings with processed data
+  static Stream<List<Map<String, dynamic>>> streamOwnerBookings(
+      String ownerEmail) {
+    return _firestore
+        .collection('Owners')
+        .doc(ownerEmail)
+        .collection('Bookings')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['bookingId'] = doc.id;
+        return data;
+      }).toList();
+    });
+  }
+
+  // Cancel booking
+  static Future<void> cancelBooking({
+    required String bookingId,
+    required String tenantEmail,
+    required String ownerEmail,
+    String? cancellationReason,
+  }) async {
+    try {
+      await updateBookingStatus(
+        bookingId: bookingId,
+        tenantEmail: tenantEmail,
+        ownerEmail: ownerEmail,
+        newStatus: 'Cancelled',
+        rejectionReason: cancellationReason,
+      );
+
+      // Create notification for owner
+      await createBookingNotification(
+        recipientEmail: ownerEmail,
+        type: 'booking_cancelled',
+        message:
+            'Booking has been cancelled by tenant. ${cancellationReason ?? ''}',
+        bookingId: bookingId,
+      );
+    } catch (e) {
+      print('Error cancelling booking: $e');
+      throw Exception('Failed to cancel booking: $e');
+    }
+  }
+
+  // Get count of pending bookings for owner
+  static Future<int> getPendingBookingsCount(String ownerEmail) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('Owners')
+          .doc(ownerEmail)
+          .collection('Bookings')
+          .where('status', whereIn: ['Pending']).get();
+
+      return querySnapshot.docs.length;
+    } catch (e) {
+      print('Error getting pending bookings count: $e');
+      return 0;
+    }
+  }
+
+  // Stream for pending bookings count
+  static Stream<int> streamPendingBookingsCount(String ownerEmail) {
+    return _firestore
+        .collection('Owners')
+        .doc(ownerEmail)
+        .collection('Bookings')
+        .where('status', whereIn: ['Pending'])
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length);
+  }
+
+  // Get booking by ID
+  static Future<Map<String, dynamic>?> getBookingById({
+    required String bookingId,
+    required String userEmail,
+    required bool isOwner,
+  }) async {
+    try {
+      final collection = isOwner ? 'Owners' : 'Tenants';
+      final doc = await _firestore
+          .collection(collection)
+          .doc(userEmail)
+          .collection('Bookings')
+          .doc(bookingId)
+          .get();
+
+      if (doc.exists) {
+        return {
+          ...doc.data()!,
+          'id': doc.id,
+        };
+      }
+      return null;
+    } catch (e) {
+      print('Error fetching booking by ID: $e');
+      throw Exception('Failed to fetch booking: $e');
+    }
+  }
+
+  // Update payment information
+  static Future<void> updateBookingPayment({
+    required String bookingId,
+    required String tenantEmail,
+    required String ownerEmail,
+    required Map<String, dynamic> paymentInfo,
+  }) async {
+    try {
+      final updateData = {
+        'paymentInfo': paymentInfo,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      // Update in all collections
+      await Future.wait([
+        _firestore
+            .collection('Tenants')
+            .doc(tenantEmail)
+            .collection('Bookings')
+            .doc(bookingId)
+            .update(updateData),
+        _firestore
+            .collection('Owners')
+            .doc(ownerEmail)
+            .collection('Bookings')
+            .doc(bookingId)
+            .update(updateData),
+        _firestore.collection('Bookings').doc(bookingId).update(updateData),
+      ]);
+
+      print('Booking payment updated successfully: $bookingId');
+    } catch (e) {
+      print('Error updating booking payment: $e');
+      throw Exception('Failed to update payment: $e');
+    }
+  }
+
+  // Create booking notification
+  static Future<void> createBookingNotification({
+    required String recipientEmail,
+    required String type,
+    required String message,
+    required String bookingId,
+  }) async {
+    try {
+      final notificationId = const Uuid().v4();
+      final notificationData = {
+        'notificationId': notificationId,
+        'recipientEmail': recipientEmail,
+        'type': type,
+        'message': message,
+        'bookingId': bookingId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'isRead': false,
+      };
+
+      await _firestore
+          .collection('Notifications')
+          .doc(notificationId)
+          .set(notificationData);
+    } catch (e) {
+      print('Error creating booking notification: $e');
+    }
+  }
+
+  // Get user documents for ID proof selection
+  static Future<List<Map<String, dynamic>>> getTenantDocuments(
+      String tenantEmail) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('Tenants')
+          .doc(tenantEmail)
+          .collection('Documents')
+          .get();
+
+      return querySnapshot.docs
+          .map((doc) => {
+                ...doc.data(),
+                'documentId': doc.id,
+              })
+          .toList();
+    } catch (e) {
+      print('Error fetching tenant documents: $e');
+      throw Exception('Failed to fetch documents: $e');
+    }
+  }
+
+  // Get notification count stream
   static Stream<int> getUnreadNotificationCountStream(String userEmail) {
     return _firestore
         .collection('Notifications')

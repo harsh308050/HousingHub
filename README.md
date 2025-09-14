@@ -4,7 +4,7 @@
 
 ## 📱 Project Overview *(Under Development)*
 
-HousingHub is a mobile application that connects tenants searching for accommodations with property owners who want to list their properties. The app focuses on easy property discovery, seamless booking management, and direct tenant-owner communication.
+HousingHub is a mobile application that connects tenants searching for accommodations with property owners who want to list their properties. The app focuses on easy property discovery and direct tenant-owner communication.
 
 ## ⚙️ Tech Stack
 
@@ -13,7 +13,6 @@ HousingHub is a mobile application that connects tenants searching for accommoda
   - Firestore (NoSQL Database)
   - Firebase Authentication (Email/Password and Google Sign-in)
   - Cloudinary Storage (for property images)
-- **Payment Integration**: Razorpay (for booking payments)
 
 ## 🗂️ Database Schema
 
@@ -69,9 +68,8 @@ HousingHub is a mobile application that connects tenants searching for accommoda
   - Browse available properties
   - View detailed property information
   - Filter properties by various criteria
-- **Property Booking**
-  - Request property booking
-  - View booking status
+- **Communication**
+  - Chat with property owners
 - **Profile Management**
   - Update personal details
 
