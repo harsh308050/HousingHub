@@ -71,13 +71,11 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
             return _buildErrorWidget(snapshot.error.toString());
           }
           final docs = snapshot.data?.docs ?? const [];
-          final items = docs
-              .map((d) {
-                final data = Map<String, dynamic>.from(d.data());
-                data['bookingId'] = data['bookingId'] ?? d.id;
-                return data;
-              })
-              .toList()
+          final items = docs.map((d) {
+            final data = Map<String, dynamic>.from(d.data());
+            data['bookingId'] = data['bookingId'] ?? d.id;
+            return data;
+          }).toList()
             ..sort((a, b) {
               final ta = (a['createdAt'] as Timestamp?)?.toDate();
               final tb = (b['createdAt'] as Timestamp?)?.toDate();
@@ -92,10 +90,13 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
           String completedKey = BookingStatus.completed.toFirestore();
           String rejectedKey = BookingStatus.rejected.toFirestore();
 
-          final pending = items.where((e) => e['status'] == pendingKey).toList();
-          final active = items.where((e) => e['status'] == acceptedKey).toList();
+          final pending =
+              items.where((e) => e['status'] == pendingKey).toList();
+          final active =
+              items.where((e) => e['status'] == acceptedKey).toList();
           final history = items
-              .where((e) => e['status'] == completedKey || e['status'] == rejectedKey)
+              .where((e) =>
+                  e['status'] == completedKey || e['status'] == rejectedKey)
               .toList();
 
           return TabBarView(
@@ -110,6 +111,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
       ),
     );
   }
+
   // Owner modal removed; navigation now opens BookingDetailsScreen
   Widget _buildSignInPrompt() {
     return Center(

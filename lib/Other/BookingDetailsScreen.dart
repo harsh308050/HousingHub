@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
+import 'dart:io';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_saver/file_saver.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Helper/BookingModels.dart';
 import 'package:housinghub/Helper/PdfReceiptGenerator.dart';
@@ -13,7 +15,8 @@ class BookingDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> bookingData;
   final String viewer; // 'tenant' | 'owner'
 
-  const BookingDetailsScreen({super.key, required this.bookingData, required this.viewer});
+  const BookingDetailsScreen(
+      {super.key, required this.bookingData, required this.viewer});
 
   @override
   State<BookingDetailsScreen> createState() => _BookingDetailsScreenState();
@@ -47,7 +50,8 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
-        title: const Text('Booking Details', style: TextStyle(fontWeight: FontWeight.w600)),
+        title: const Text('Booking Details',
+            style: TextStyle(fontWeight: FontWeight.w600)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -93,22 +97,28 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
               children: [
                 Text(
                   property['title'] ?? 'Property',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  booking['bookingId'] != null ? 'Booking ID: ${booking['bookingId']}' : '',
+                  booking['bookingId'] != null
+                      ? 'Booking ID: ${booking['bookingId']}'
+                      : '',
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
                 if (createdAt != null) ...[
                   const SizedBox(height: 2),
-                  Text('Booked on ${DateFormat('MMM dd, yyyy - hh:mm a').format(createdAt)}',
+                  Text(
+                      'Booked on ${DateFormat('MMM dd, yyyy - hh:mm a').format(createdAt)}',
                       style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                 ],
               ],
             ),
           ),
-          Text(_inr.format(amount), style: TextStyle(color: AppConfig.primaryColor, fontWeight: FontWeight.bold)),
+          Text(_inr.format(amount),
+              style: TextStyle(
+                  color: AppConfig.primaryColor, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -137,13 +147,17 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-      child: Text(status.displayName, style: TextStyle(color: fg, fontWeight: FontWeight.w600)),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      child: Text(status.displayName,
+          style: TextStyle(color: fg, fontWeight: FontWeight.w600)),
     );
   }
 
   Widget _propertyCard() {
-    final images = (property['images'] is List) ? List<String>.from(property['images']) : const <String>[];
+    final images = (property['images'] is List)
+        ? List<String>.from(property['images'])
+        : const <String>[];
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -155,13 +169,16 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
         children: [
           if (images.isNotEmpty)
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
               child: AspectRatio(
-                aspectRatio: 16/9,
+                aspectRatio: 16 / 9,
                 child: Image.network(
                   images.first,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(color: Colors.grey[300], child: const Icon(Icons.broken_image_outlined)),
+                  errorBuilder: (_, __, ___) => Container(
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.broken_image_outlined)),
                 ),
               ),
             ),
@@ -170,19 +187,35 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(property['title'] ?? 'Property', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                Text(property['title'] ?? 'Property',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 6),
                 Row(children: [
                   const Icon(Icons.location_on, size: 16, color: Colors.grey),
                   const SizedBox(width: 4),
-                  Expanded(child: Text(property['address'] ?? 'Address', style: TextStyle(color: Colors.grey[700]))),
+                  Expanded(
+                      child: Text(property['address'] ?? 'Address',
+                          style: TextStyle(color: Colors.grey[700]))),
                 ]),
                 const SizedBox(height: 12),
                 Wrap(spacing: 12, runSpacing: 8, children: [
-                  _pill('Type', '${property['roomType'] ?? 'N/A'} ${property['propertyType'] ?? ''}'.trim()),
-                  _pill('Monthly Rent', _amountText(_parsePrice(property['rent'] ?? property['price'] ?? property['monthlyRent']))),
-                  _pill('Security Deposit', _amountText(_parsePrice(property['deposit'] ?? property['securityDeposit']))),
-                  if ((property['minimumBookingPeriod'] ?? '').toString().isNotEmpty)
+                  _pill(
+                      'Type',
+                      '${property['roomType'] ?? 'N/A'} ${property['propertyType'] ?? ''}'
+                          .trim()),
+                  _pill(
+                      'Monthly Rent',
+                      _amountText(_parsePrice(property['rent'] ??
+                          property['price'] ??
+                          property['monthlyRent']))),
+                  _pill(
+                      'Security Deposit',
+                      _amountText(_parsePrice(
+                          property['deposit'] ?? property['securityDeposit']))),
+                  if ((property['minimumBookingPeriod'] ?? '')
+                      .toString()
+                      .isNotEmpty)
                     _pill('Min Period', property['minimumBookingPeriod']),
                 ]),
               ],
@@ -197,22 +230,31 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
 
   Widget _bookingInfoCard(DateTime? checkInDate, double amount) {
     return _sectionCard('Booking Information', [
-      _row('Check-in Date', checkInDate != null ? DateFormat('MMM dd, yyyy').format(checkInDate) : 'N/A'),
+      _row(
+          'Check-in Date',
+          checkInDate != null
+              ? DateFormat('MMM dd, yyyy').format(checkInDate)
+              : 'N/A'),
       _row('Total Amount', _inr.format(amount)),
-      if ((booking['notes'] ?? '').toString().trim().isNotEmpty) _row('Notes', booking['notes']),
+      if ((booking['notes'] ?? '').toString().trim().isNotEmpty)
+        _row('Notes', booking['notes']),
     ]);
   }
 
   Widget _peopleCard() {
-    final ownerName = (booking['ownerName'] ?? property['ownerName'] ?? '').toString();
-    final ownerPhone = (booking['ownerMobileNumber'] ?? property['ownerPhone'] ?? '').toString();
+    final ownerName =
+        (booking['ownerName'] ?? property['ownerName'] ?? '').toString();
+    final ownerPhone =
+        (booking['ownerMobileNumber'] ?? property['ownerPhone'] ?? '')
+            .toString();
     final ownerEmail = (booking['ownerEmail'] ?? '').toString();
 
     return LayoutBuilder(builder: (context, constraints) {
       final isNarrow = constraints.maxWidth < 600; // stack on phones
 
       final tenantCard = _sectionCard('Tenant', [
-        _row('Name', '${tenant['firstName'] ?? ''} ${tenant['lastName'] ?? ''}'.trim()),
+        _row('Name',
+            '${tenant['firstName'] ?? ''} ${tenant['lastName'] ?? ''}'.trim()),
         _row('Email', tenant['tenantEmail'] ?? ''),
         _row('Phone', tenant['mobileNumber'] ?? ''),
         _row('Gender', tenant['gender'] ?? ''),
@@ -258,7 +300,8 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
     } else if (idProof is List) {
       for (final item in idProof) {
         if (item is Map<String, dynamic>) {
-          entries.add(MapEntry(item['documentType']?.toString() ?? 'Document', item));
+          entries.add(
+              MapEntry(item['documentType']?.toString() ?? 'Document', item));
         }
       }
     }
@@ -272,18 +315,26 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
 
   Widget _paymentCard() {
     final payment = booking['paymentInfo'];
-    final status = payment != null ? (payment['status']?.toString() ?? 'N/A') : 'N/A';
-    final amount = payment != null && payment['amount'] != null ? _inr.format(_parsePrice(payment['amount'])) : null;
+    final status =
+        payment != null ? (payment['status']?.toString() ?? 'N/A') : 'N/A';
+    final amount = payment != null && payment['amount'] != null
+        ? _inr.format(_parsePrice(payment['amount']))
+        : null;
     final date = payment != null && payment['paymentCompletedAt'] != null
-        ? DateFormat('MMM dd, yyyy HH:mm').format(DateTime.tryParse(payment['paymentCompletedAt'].toString()) ?? DateTime.now())
+        ? DateFormat('MMM dd, yyyy HH:mm').format(
+            DateTime.tryParse(payment['paymentCompletedAt'].toString()) ??
+                DateTime.now())
         : null;
     final receiptUrl = booking['receiptUrl']?.toString();
 
     return _sectionCard('Payment', [
       _row('Status', status),
-      if (payment != null && payment['paymentId'] != null) _row('Payment ID', payment['paymentId'].toString()),
-      if (payment != null && payment['paymentMethod'] != null) _row('Method', payment['paymentMethod'].toString()),
-      if (payment != null && payment['currency'] != null) _row('Currency', payment['currency'].toString()),
+      if (payment != null && payment['paymentId'] != null)
+        _row('Payment ID', payment['paymentId'].toString()),
+      if (payment != null && payment['paymentMethod'] != null)
+        _row('Method', payment['paymentMethod'].toString()),
+      if (payment != null && payment['currency'] != null)
+        _row('Currency', payment['currency'].toString()),
       if (amount != null) _row('Amount', amount),
       if (date != null) _row('Payment Date', date),
       if (receiptUrl != null)
@@ -293,12 +344,17 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
             children: [
               Icon(Icons.receipt, color: Colors.green.shade700, size: 18),
               const SizedBox(width: 8),
-              Expanded(child: Text('Receipt available', style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w600))),
+              Expanded(
+                  child: Text('Receipt available',
+                      style: TextStyle(
+                          color: Colors.green.shade700,
+                          fontWeight: FontWeight.w600))),
               TextButton.icon(
                 onPressed: () => _downloadReceipt(receiptUrl),
                 icon: const Icon(Icons.download),
                 label: const Text('Download'),
-                style: TextButton.styleFrom(foregroundColor: AppConfig.primaryColor),
+                style: TextButton.styleFrom(
+                    foregroundColor: AppConfig.primaryColor),
               )
             ],
           ),
@@ -315,8 +371,11 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
             child: ElevatedButton.icon(
               onPressed: () => _downloadReceipt(receiptUrl),
               icon: const Icon(Icons.download, color: Colors.white),
-              label: const Text('Download Receipt', style: TextStyle(color: Colors.white)),
-              style: ElevatedButton.styleFrom(backgroundColor: AppConfig.primaryColor, padding: const EdgeInsets.symmetric(vertical: 14)),
+              label: const Text('Download Receipt',
+                  style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppConfig.primaryColor,
+                  padding: const EdgeInsets.symmetric(vertical: 14)),
             ),
           ),
         if (receiptUrl != null) const SizedBox(width: 12),
@@ -325,7 +384,9 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
             onPressed: _contactOwner,
             icon: const Icon(Icons.phone),
             label: const Text('Contact Owner'),
-            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), side: BorderSide(color: AppConfig.primaryColor)),
+            style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: BorderSide(color: AppConfig.primaryColor)),
           ),
         ),
       ],
@@ -341,7 +402,8 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
         border: Border.all(color: Colors.grey[200]!),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        Text(title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
         const SizedBox(height: 10),
         ...children,
       ]),
@@ -352,7 +414,9 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        SizedBox(width: 130, child: Text(label, style: TextStyle(color: Colors.grey[600]))),
+        SizedBox(
+            width: 130,
+            child: Text(label, style: TextStyle(color: Colors.grey[600]))),
         const SizedBox(width: 12),
         Expanded(
           child: SingleChildScrollView(
@@ -378,8 +442,13 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
         border: Border.all(color: AppConfig.primaryColor.withOpacity(0.2)),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Text('$label: ', style: TextStyle(color: Colors.grey[700], fontSize: 12)),
-        Text(value, style: TextStyle(color: AppConfig.primaryColor, fontWeight: FontWeight.w600, fontSize: 12)),
+        Text('$label: ',
+            style: TextStyle(color: Colors.grey[700], fontSize: 12)),
+        Text(value,
+            style: TextStyle(
+                color: AppConfig.primaryColor,
+                fontWeight: FontWeight.w600,
+                fontSize: 12)),
       ]),
     );
   }
@@ -408,7 +477,8 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to open document')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Unable to open document')));
       }
     }
   }
@@ -422,10 +492,12 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
         _forceRawUrl(url),
       }.toList();
 
-  http.Response? ok;
+      http.Response? ok;
       for (final u in variants) {
         final resp = await http.get(Uri.parse(u));
-        if (resp.statusCode == 200 && resp.bodyBytes.isNotEmpty && _looksLikePdf(resp.bodyBytes, resp.headers)) {
+        if (resp.statusCode == 200 &&
+            resp.bodyBytes.isNotEmpty &&
+            _looksLikePdf(resp.bodyBytes, resp.headers)) {
           ok = resp;
           break;
         }
@@ -434,25 +506,83 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
       // If still unauthorized, regenerate locally as a fallback
       if (ok == null) {
         final bytes = await _generateReceiptLocally();
-        final name = 'HousingHub_Receipt_${booking['bookingId'] ?? DateTime.now().millisecondsSinceEpoch}.pdf';
-        await FileSaver.instance.saveFile(name: name, bytes: bytes, ext: 'pdf', mimeType: MimeType.pdf);
+        final baseName =
+            'HousingHub_Receipt_${booking['bookingId'] ?? DateTime.now().millisecondsSinceEpoch}';
+        final savedPath = await _savePdfToDownloads(bytes, baseName) ?? '';
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Receipt saved to Downloads (regenerated locally)')));
+          final hasPath = savedPath.toString().isNotEmpty;
+          final snackBar = SnackBar(
+            content: Text(hasPath
+                ? 'Receipt saved: $savedPath'
+                : 'Receipt saved to Downloads (regenerated locally)'),
+            action: hasPath
+                ? SnackBarAction(
+                    label: 'Open',
+                    onPressed: () {
+                      OpenFilex.open(savedPath.toString());
+                    },
+                  )
+                : null,
+          );
+          ScaffoldMessenger.of(context).showSnackBar(snackBar);
         }
         return;
       }
 
-      final name = 'HousingHub_Receipt_${booking['bookingId'] ?? DateTime.now().millisecondsSinceEpoch}.pdf';
-  await FileSaver.instance.saveFile(name: name, bytes: ok.bodyBytes, ext: 'pdf', mimeType: MimeType.pdf);
+      final baseName =
+          'HousingHub_Receipt_${booking['bookingId'] ?? DateTime.now().millisecondsSinceEpoch}';
+      final savedPath = await _savePdfToDownloads(ok.bodyBytes, baseName) ?? '';
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Receipt saved to Downloads')));
+        final hasPath = savedPath.toString().isNotEmpty;
+        final snackBar = SnackBar(
+          content: Text(hasPath
+              ? 'Receipt saved: $savedPath'
+              : 'Receipt saved to Downloads'),
+          action: hasPath
+              ? SnackBarAction(
+                  label: 'Open',
+                  onPressed: () {
+                    OpenFilex.open(savedPath.toString());
+                  },
+                )
+              : null,
+        );
+        ScaffoldMessenger.of(context).showSnackBar(snackBar);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error downloading receipt: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error downloading receipt: $e')));
       }
     }
+  }
+
+  // Best-effort save to public Downloads/HousingHub on Android; otherwise fall back to plugin's location
+  Future<String?> _savePdfToDownloads(
+      Uint8List bytes, String fileBaseName) async {
+    String? finalPath;
+    try {
+      finalPath = await FileSaver.instance.saveFile(
+          name: fileBaseName, bytes: bytes, ext: 'pdf', mimeType: MimeType.pdf);
+    } catch (_) {}
+
+    if (Platform.isAndroid) {
+      try {
+        final downloadsDir =
+            Directory('/storage/emulated/0/Download/HousingHub');
+        if (!await downloadsDir.exists()) {
+          await downloadsDir.create(recursive: true);
+        }
+        final out = File('${downloadsDir.path}/$fileBaseName.pdf');
+        await out.writeAsBytes(bytes, flush: true);
+        finalPath = out.path;
+      } catch (e) {
+        // Ignore if scoped storage blocks direct write; the plugin-saved path remains
+        debugPrint('Warning: Could not copy to public Downloads: $e');
+      }
+    }
+    return finalPath;
   }
 
   bool _looksLikePdf(Uint8List bytes, Map<String, String> headers) {
@@ -463,7 +593,7 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
         bytes[1] == 0x50 && // P
         bytes[2] == 0x44 && // D
         bytes[3] == 0x46 && // F
-        bytes[4] == 0x2D;   // -
+        bytes[4] == 0x2D; // -
     if (ct.contains('application/pdf')) return hasPdfHeader;
     // Some CDNs return octet-stream; rely on magic header
     if (ct.contains('application/octet-stream')) return hasPdfHeader;
@@ -478,14 +608,21 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
     final propertyData = Map<String, dynamic>.from(property);
     final ownerData = <String, dynamic>{
       'name': (booking['ownerName'] ?? property['ownerName'] ?? '').toString(),
-      'email': (booking['ownerEmail'] ?? property['ownerEmail'] ?? '').toString(),
-      'mobileNumber': (booking['ownerMobileNumber'] ?? property['ownerPhone'] ?? '').toString(),
+      'email':
+          (booking['ownerEmail'] ?? property['ownerEmail'] ?? '').toString(),
+      'mobileNumber':
+          (booking['ownerMobileNumber'] ?? property['ownerPhone'] ?? '')
+              .toString(),
     };
     final paymentInfo = Map<String, dynamic>.from(booking['paymentInfo'] ?? {});
     final checkInDate = _asDateTime(booking['checkInDate']) ?? DateTime.now();
-    final paymentDate = _asDateTime(paymentInfo['paymentCompletedAt'] ?? booking['createdAt']) ?? DateTime.now();
-    final rentAmount = _parsePrice(property['rent'] ?? property['price'] ?? property['monthlyRent']);
-    final depositAmount = _parsePrice(property['deposit'] ?? property['securityDeposit']);
+    final paymentDate = _asDateTime(
+            paymentInfo['paymentCompletedAt'] ?? booking['createdAt']) ??
+        DateTime.now();
+    final rentAmount = _parsePrice(
+        property['rent'] ?? property['price'] ?? property['monthlyRent']);
+    final depositAmount =
+        _parsePrice(property['deposit'] ?? property['securityDeposit']);
     double r = rentAmount, d = depositAmount;
     if (r <= 0 && d <= 0) {
       r = _computeTotalAmount(booking);
@@ -501,7 +638,9 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
       paymentDate: paymentDate,
       rentAmount: r,
       depositAmount: d,
-      notes: (booking['notes'] ?? '').toString().trim().isEmpty ? null : booking['notes'].toString(),
+      notes: (booking['notes'] ?? '').toString().trim().isEmpty
+          ? null
+          : booking['notes'].toString(),
     );
     return bytes;
   }
@@ -530,11 +669,14 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
 
   void _contactOwner() async {
     // Prefer booking ownerMobileNumber; fallback to property ownerPhone
-    final raw = (booking['ownerMobileNumber'] ?? property['ownerPhone'] ?? '').toString().trim();
+    final raw = (booking['ownerMobileNumber'] ?? property['ownerPhone'] ?? '')
+        .toString()
+        .trim();
     final phone = _sanitizePhone(raw);
     if (phone.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Owner phone number not available')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Owner phone number not available')));
       }
       return;
     }
@@ -543,7 +685,8 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to open dialer')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Unable to open dialer')));
       }
     }
   }
@@ -595,8 +738,11 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
       if (a > 0) return a;
     }
     final propertyData = bookingData['propertyData'] ?? {};
-    final rent = _parsePrice(propertyData['rent'] ?? propertyData['price'] ?? propertyData['monthlyRent']);
-    final deposit = _parsePrice(propertyData['deposit'] ?? propertyData['securityDeposit']);
+    final rent = _parsePrice(propertyData['rent'] ??
+        propertyData['price'] ??
+        propertyData['monthlyRent']);
+    final deposit =
+        _parsePrice(propertyData['deposit'] ?? propertyData['securityDeposit']);
     final computed = rent + deposit;
     if (computed > 0) return computed;
     final paymentInfo = bookingData['paymentInfo'];

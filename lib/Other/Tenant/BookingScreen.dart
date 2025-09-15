@@ -8,6 +8,7 @@ import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/Helper/BookingModels.dart';
 import 'package:housinghub/Helper/PdfReceiptGenerator.dart';
+import 'package:housinghub/Helper/LoadingStateManager.dart';
 
 class BookingScreen extends StatefulWidget {
   final Map<String, dynamic> propertyData;
@@ -66,6 +67,7 @@ class _BookingScreenState extends State<BookingScreen>
   String? _paymentId;
   String? _paymentSignature;
   DateTime? _paymentCompletedAt;
+  bool _isSubmitting = false;
 
   // Notes
   final TextEditingController _notesController = TextEditingController();
@@ -243,162 +245,152 @@ class _BookingScreenState extends State<BookingScreen>
   }
 
   Future<void> _submitBooking() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user?.email == null) {
-        throw Exception('User not authenticated');
-      }
+    await LoadingStateManager.runWithLoader<Map<String, dynamic>?>(
+      context: context,
+      loadingState: (loading) {
+        if (mounted) {
+          setState(() => _isSubmitting = loading);
+        }
+      },
+      operation: () async {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user?.email == null) {
+          throw Exception('User not authenticated');
+        }
 
-      // Prepare booking data
-      final propertyData =
-          BookingPropertyData.fromPropertyData(widget.propertyData);
-      final tenantData = TenantData(
-        tenantEmail: user!.email!,
-        firstName: _firstNameController.text,
-        lastName: _lastNameController.text,
-        mobileNumber: _phoneController.text,
-        gender: _selectedGender,
-        profilePhotoUrl: _tenantData['profilePhotoUrl'],
-      );
+        // Prepare booking data
+        final propertyData =
+            BookingPropertyData.fromPropertyData(widget.propertyData);
+        final tenantData = TenantData(
+          tenantEmail: user!.email!,
+          firstName: _firstNameController.text,
+          lastName: _lastNameController.text,
+          mobileNumber: _phoneController.text,
+          gender: _selectedGender,
+          profilePhotoUrl: _tenantData['profilePhotoUrl'],
+        );
 
-      // Prepare all required documents
-      Map<String, dynamic> allDocuments = {};
-      for (String docType in _selectedDocuments.keys) {
-        final doc = _selectedDocuments[docType];
-        if (doc != null) {
-          if (doc['isUploaded'] == true && doc['tempFile'] != null) {
-            // Handle uploaded file - upload to cloud storage
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Uploading $docType...'),
-                backgroundColor: AppConfig.primaryColor,
-              ),
-            );
+        // Prepare all required documents
+        Map<String, dynamic> allDocuments = {};
+        for (String docType in _selectedDocuments.keys) {
+          final doc = _selectedDocuments[docType];
+          if (doc != null) {
+            if (doc['isUploaded'] == true && doc['tempFile'] != null) {
+              // Upload to cloud storage
+              final url = await Api.uploadImageToCloudinary(
+                doc['tempFile'] as File,
+                'tenant_documents/${user.email!.replaceAll('@', '_')}',
+              );
 
-            final url = await Api.uploadImageToCloudinary(
-              doc['tempFile'] as File,
-              'tenant_documents/${user.email!.replaceAll('@', '_')}',
-            );
-
-            allDocuments[docType] = {
-              'documentId': DateTime.now().millisecondsSinceEpoch.toString(),
-              'documentType': docType,
-              'documentUrl': url,
-              'documentName': docType,
-              'uploadedAt': DateTime.now().toIso8601String(),
-            };
-          } else {
-            // Use existing document
-            allDocuments[docType] = doc;
+              allDocuments[docType] = {
+                'documentId': DateTime.now().millisecondsSinceEpoch.toString(),
+                'documentType': docType,
+                'documentUrl': url,
+                'documentName': docType,
+                'uploadedAt': DateTime.now().toIso8601String(),
+              };
+            } else {
+              // Use existing document
+              allDocuments[docType] = doc;
+            }
           }
         }
-      }
 
-      // Extract owner fields
-      final String ownerEmail = widget.propertyData['ownerEmail'] ?? '';
-      final String ownerNameField = (widget.propertyData['ownerName'] ??
-              widget.propertyData['ownerFullName'] ??
-              '')
-          .toString()
-          .trim();
-      final String ownerMobileField = (widget.propertyData['ownerPhone'] ??
-                  widget.propertyData['ownerMobileNumber'] ??
-                  widget.propertyData['ownerContact'])
-              ?.toString() ??
-          '';
+        // Extract owner fields
+        final String ownerEmail = widget.propertyData['ownerEmail'] ?? '';
+        final String ownerNameField = (widget.propertyData['ownerName'] ??
+                widget.propertyData['ownerFullName'] ??
+                '')
+            .toString()
+            .trim();
+        final String ownerMobileField = (widget.propertyData['ownerPhone'] ??
+                    widget.propertyData['ownerMobileNumber'] ??
+                    widget.propertyData['ownerContact'])
+                ?.toString() ??
+            '';
 
-      // Create booking
-      final bookingId = await Api.createBooking(
-        tenantEmail: user.email!,
-        ownerEmail: ownerEmail,
-        propertyId: widget.propertyData['id'] ?? '',
-        propertyData: propertyData.toMap(),
-        tenantData: tenantData.toMap(),
-        idProof: allDocuments, // Changed to use all documents
-        checkInDate: _selectedCheckInDate!,
-        amount: propertyData.totalAmount,
-        ownerName: ownerNameField.isNotEmpty ? ownerNameField : null,
-        ownerMobileNumber:
-            ownerMobileField.isNotEmpty ? ownerMobileField : null,
-        notes: _notesController.text.isEmpty ? null : _notesController.text,
-        paymentId: _paymentId,
-        paymentSignature: _paymentSignature,
-        paymentCompletedAt: _paymentCompletedAt,
-        paymentStatus: _paymentCompleted ? 'Completed' : 'Pending',
-      );
+        // Create booking
+        final bookingId = await Api.createBooking(
+          tenantEmail: user.email!,
+          ownerEmail: ownerEmail,
+          propertyId: widget.propertyData['id'] ?? '',
+          propertyData: propertyData.toMap(),
+          tenantData: tenantData.toMap(),
+          idProof: allDocuments, // Use all documents
+          checkInDate: _selectedCheckInDate!,
+          amount: propertyData.totalAmount,
+          ownerName: ownerNameField.isNotEmpty ? ownerNameField : null,
+          ownerMobileNumber:
+              ownerMobileField.isNotEmpty ? ownerMobileField : null,
+          notes: _notesController.text.isEmpty ? null : _notesController.text,
+          paymentId: _paymentId,
+          paymentSignature: _paymentSignature,
+          paymentCompletedAt: _paymentCompletedAt,
+          paymentStatus: _paymentCompleted ? 'Completed' : 'Pending',
+        );
 
-      // Generate and upload PDF receipt if payment was completed
-      String? receiptUrl;
-      if (_paymentCompleted && _paymentId != null) {
-        try {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Generating receipt...'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+        // Generate and upload PDF receipt if payment was completed
+        String? receiptUrl;
+        if (_paymentCompleted && _paymentId != null) {
+          try {
+            final rentAmount = _parsePrice(widget.propertyData['price']);
+            final depositAmount = _parsePrice(
+                widget.propertyData['securityDeposit'] ??
+                    widget.propertyData['deposit']);
+            final ownerName = ownerNameField;
+            final nameParts = ownerName.split(' ');
+            final ownerFirst = nameParts.isNotEmpty ? nameParts.first : '';
+            final ownerLast =
+                nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
 
-          final rentAmount = _parsePrice(widget.propertyData['price']);
-          final depositAmount = _parsePrice(
-              widget.propertyData['securityDeposit'] ??
-                  widget.propertyData['deposit']);
-          final ownerName = ownerNameField;
-          final nameParts = ownerName.split(' ');
-          final ownerFirst = nameParts.isNotEmpty ? nameParts.first : '';
-          final ownerLast =
-              nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
-
-          receiptUrl = await PdfReceiptGenerator.generateAndUploadReceipt(
-            bookingId: bookingId,
-            tenantData: tenantData.toMap(),
-            propertyData: propertyData.toMap(),
-            ownerData: {
-              'firstName': ownerFirst,
-              'lastName': ownerLast,
-              'ownerName': ownerName,
-              'mobileNumber': ownerMobileField,
-            },
-            paymentData: {
-              'paymentId': _paymentId,
-              'paymentSignature': _paymentSignature,
-              'status': 'Captured',
-              'paymentMethod': 'Razorpay',
-              'currency': 'INR',
-            },
-            checkInDate: _selectedCheckInDate!,
-            paymentDate: _paymentCompletedAt!,
-            rentAmount: rentAmount,
-            depositAmount: depositAmount,
-            notes: _notesController.text.isEmpty ? null : _notesController.text,
-          );
-
-          // Update booking with receipt URL
-          await Api.updateBookingWithReceiptUrl(
-            bookingId: bookingId,
-            tenantEmail: user.email!,
-            ownerEmail: ownerEmail,
-            receiptUrl: receiptUrl,
-            ownerName: ownerNameField.isNotEmpty ? ownerNameField : null,
-            ownerMobileNumber:
-                ownerMobileField.isNotEmpty ? ownerMobileField : null,
-          );
-        } catch (e) {
-          print('Error generating PDF receipt: $e');
-          // Don't fail the booking if receipt generation fails
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                    'Booking successful, but receipt generation failed. You can contact support for a receipt copy.'),
-                backgroundColor: Colors.orange,
-                duration: Duration(seconds: 4),
-              ),
+            receiptUrl = await PdfReceiptGenerator.generateAndUploadReceipt(
+              bookingId: bookingId,
+              tenantData: tenantData.toMap(),
+              propertyData: propertyData.toMap(),
+              ownerData: {
+                'firstName': ownerFirst,
+                'lastName': ownerLast,
+                'ownerName': ownerName,
+                'mobileNumber': ownerMobileField,
+                'email': ownerEmail,
+              },
+              paymentData: {
+                'paymentId': _paymentId,
+                'paymentSignature': _paymentSignature,
+                'status': 'Captured',
+                'paymentMethod': 'Razorpay',
+                'currency': 'INR',
+              },
+              checkInDate: _selectedCheckInDate!,
+              paymentDate: _paymentCompletedAt!,
+              rentAmount: rentAmount,
+              depositAmount: depositAmount,
+              notes:
+                  _notesController.text.isEmpty ? null : _notesController.text,
             );
+
+            // Update booking with receipt URL
+            await Api.updateBookingWithReceiptUrl(
+              bookingId: bookingId,
+              tenantEmail: user.email!,
+              ownerEmail: ownerEmail,
+              receiptUrl: receiptUrl,
+              ownerName: ownerNameField.isNotEmpty ? ownerNameField : null,
+              ownerMobileNumber:
+                  ownerMobileField.isNotEmpty ? ownerMobileField : null,
+            );
+          } catch (e) {
+            // Don't fail the booking if receipt generation fails
+            debugPrint('Error generating PDF receipt: $e');
           }
         }
-      }
 
-      if (mounted) {
+        return {
+          'receiptUrl': receiptUrl,
+        };
+      },
+      onSuccess: (result) {
+        final String? receiptUrl = result?['receiptUrl'] as String?;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -409,17 +401,16 @@ class _BookingScreenState extends State<BookingScreen>
           ),
         );
         Navigator.of(context).pop(true);
-      }
-    } catch (e) {
-      if (mounted) {
+      },
+      onError: (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error submitting booking: $e'),
             backgroundColor: Colors.red,
           ),
         );
-      }
-    }
+      },
+    );
   }
 
   @override
@@ -442,26 +433,39 @@ class _BookingScreenState extends State<BookingScreen>
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          _buildStepIndicator(),
-          Expanded(
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: PageView(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _buildPropertyDetailsStep(),
-                  _buildTenantInfoStep(),
-                  _buildDocumentStep(),
-                  _buildPaymentStep(),
-                  _buildReviewStep(),
-                ],
+          Column(
+            children: [
+              _buildStepIndicator(),
+              Expanded(
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: PageView(
+                    controller: _pageController,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: [
+                      _buildPropertyDetailsStep(),
+                      _buildTenantInfoStep(),
+                      _buildDocumentStep(),
+                      _buildPaymentStep(),
+                      _buildReviewStep(),
+                    ],
+                  ),
+                ),
+              ),
+              _buildBottomNavigation(),
+            ],
+          ),
+          if (_isSubmitting)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withOpacity(0.4),
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
               ),
             ),
-          ),
-          _buildBottomNavigation(),
         ],
       ),
     );

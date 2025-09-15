@@ -202,8 +202,8 @@ class PdfReceiptGenerator {
               ),
               pw.SizedBox(width: 40),
               pw.Expanded(
-                child: _buildPropertyInfo(
-                    propertyData, ownerData, font, fontBold),
+                child:
+                    _buildPropertyInfo(propertyData, ownerData, font, fontBold),
               ),
             ],
           ),
@@ -365,12 +365,20 @@ class PdfReceiptGenerator {
         (ownerData['ownerName']?.toString() ?? '').trim();
     final String ownerFullFromProperty =
         (propertyData['ownerName']?.toString() ?? '').trim();
+    final String ownerEmail = (ownerData['email']?.toString() ??
+            propertyData['ownerEmail']?.toString() ??
+            '')
+        .trim();
     final String computedOwnerName = (() {
       final combined =
           [ownerFirst, ownerLast].where((p) => p.isNotEmpty).join(' ').trim();
       if (combined.isNotEmpty) return combined;
       if (ownerFullFromData.isNotEmpty) return ownerFullFromData;
       if (ownerFullFromProperty.isNotEmpty) return ownerFullFromProperty;
+      if (ownerEmail.isNotEmpty) {
+        final local = ownerEmail.split('@').first;
+        if (local.isNotEmpty) return local;
+      }
       return 'Not provided';
     })();
     final String ownerPhone =
@@ -415,6 +423,10 @@ class PdfReceiptGenerator {
           pw.SizedBox(height: 5),
           pw.Text('Name: $computedOwnerName',
               style: pw.TextStyle(font: font, fontSize: 10)),
+          pw.Text(
+            'Email: ${ownerEmail.isNotEmpty ? ownerEmail : 'Not provided'}',
+            style: pw.TextStyle(font: font, fontSize: 10),
+          ),
           pw.Text(
             'Contact: ${ownerPhone.isNotEmpty ? ownerPhone : 'Not provided'}',
             style: pw.TextStyle(font: font, fontSize: 10),
@@ -743,9 +755,6 @@ class PdfReceiptGenerator {
     required String bookingId,
     String? paymentId,
   }) {
-    final verifyUrl = '${AppConfig.receiptVerificationBaseUrl}/$receiptNo';
-    final qrData =
-        'verify:$verifyUrl|receipt:$receiptNo|booking:$bookingId|payment:${paymentId ?? ''}';
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(vertical: 18),
       decoration: const pw.BoxDecoration(
@@ -754,31 +763,6 @@ class PdfReceiptGenerator {
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
-          // QR Code with caption
-          pw.Column(
-            children: [
-              pw.Container(
-                padding: const pw.EdgeInsets.all(6),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.grey300),
-                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-                ),
-                child: pw.BarcodeWidget(
-                  color: PdfColors.black,
-                  barcode: pw.Barcode.qrCode(),
-                  data: qrData,
-                  width: 96,
-                  height: 96,
-                ),
-              ),
-              pw.SizedBox(height: 4),
-              pw.Text(
-                'Scan to verify',
-                style: pw.TextStyle(font: font, fontSize: 8, color: PdfColors.grey700),
-              ),
-            ],
-          ),
-          pw.SizedBox(width: 16),
           // Contact + Verify text
           pw.Expanded(
             child: pw.Column(
@@ -811,22 +795,6 @@ class PdfReceiptGenerator {
                           decoration: pw.TextDecoration.underline),
                     ),
                   ),
-                pw.SizedBox(height: 6),
-                pw.Row(children: [
-                  pw.Text('Verify this receipt: ',
-                      style: pw.TextStyle(font: font, fontSize: 9)),
-                  pw.UrlLink(
-                    destination: verifyUrl,
-                    child: pw.Text(
-                      verifyUrl,
-                      style: pw.TextStyle(
-                          font: font,
-                          fontSize: 9,
-                          color: PdfColors.blue800,
-                          decoration: pw.TextDecoration.underline),
-                    ),
-                  ),
-                ]),
                 pw.SizedBox(height: 6),
                 pw.Text(
                   'Digitally issued by ${AppConfig.companyName}. No physical signature required.',

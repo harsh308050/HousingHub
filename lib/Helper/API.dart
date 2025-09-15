@@ -3447,24 +3447,34 @@ class Api {
       if (ownerNameResolved.isEmpty || ownerMobileResolved.isEmpty) {
         // Try to pull from central booking or owner profile
         try {
-          final central = await _firestore.collection('Bookings').doc(bookingId).get();
+          final central =
+              await _firestore.collection('Bookings').doc(bookingId).get();
           final centralData = central.data();
           if (centralData != null) {
             if (ownerNameResolved.isEmpty) {
-              ownerNameResolved = (centralData['ownerName']?.toString() ?? '').trim();
+              ownerNameResolved =
+                  (centralData['ownerName']?.toString() ?? '').trim();
               if (ownerNameResolved.isEmpty) {
                 final pd = centralData['propertyData'] as Map<String, dynamic>?;
                 if (pd != null) {
-                  ownerNameResolved = (pd['ownerName']?.toString() ?? pd['ownerFullName']?.toString() ?? '').trim();
+                  ownerNameResolved = (pd['ownerName']?.toString() ??
+                          pd['ownerFullName']?.toString() ??
+                          '')
+                      .trim();
                 }
               }
             }
             if (ownerMobileResolved.isEmpty) {
-              ownerMobileResolved = (centralData['ownerMobileNumber']?.toString() ?? '').trim();
+              ownerMobileResolved =
+                  (centralData['ownerMobileNumber']?.toString() ?? '').trim();
               if (ownerMobileResolved.isEmpty) {
                 final pd = centralData['propertyData'] as Map<String, dynamic>?;
                 if (pd != null) {
-                  ownerMobileResolved = (pd['ownerPhone']?.toString() ?? pd['ownerMobileNumber']?.toString() ?? pd['ownerContact']?.toString() ?? '').trim();
+                  ownerMobileResolved = (pd['ownerPhone']?.toString() ??
+                          pd['ownerMobileNumber']?.toString() ??
+                          pd['ownerContact']?.toString() ??
+                          '')
+                      .trim();
                 }
               }
             }
@@ -3475,17 +3485,27 @@ class Api {
       }
       if (ownerNameResolved.isEmpty || ownerMobileResolved.isEmpty) {
         try {
-          final ownerDoc = await _firestore.collection('Owners').doc(ownerEmail).get();
+          final ownerDoc =
+              await _firestore.collection('Owners').doc(ownerEmail).get();
           if (ownerDoc.exists) {
             final od = ownerDoc.data()!;
             if (ownerNameResolved.isEmpty) {
               final first = (od['firstName']?.toString() ?? '').trim();
               final last = (od['lastName']?.toString() ?? '').trim();
               final full = [first, last].where((e) => e.isNotEmpty).join(' ');
-              ownerNameResolved = (od['fullName']?.toString() ?? od['ownerName']?.toString() ?? od['name']?.toString() ?? full).trim();
+              ownerNameResolved = (od['fullName']?.toString() ??
+                      od['ownerName']?.toString() ??
+                      od['name']?.toString() ??
+                      full)
+                  .trim();
             }
             if (ownerMobileResolved.isEmpty) {
-              ownerMobileResolved = (od['phoneNumber']?.toString() ?? od['mobileNumber']?.toString() ?? od['contact']?.toString() ?? od['phone']?.toString() ?? '').trim();
+              ownerMobileResolved = (od['phoneNumber']?.toString() ??
+                      od['mobileNumber']?.toString() ??
+                      od['contact']?.toString() ??
+                      od['phone']?.toString() ??
+                      '')
+                  .trim();
             }
           }
         } catch (e) {
@@ -3498,7 +3518,8 @@ class Api {
         'receiptGeneratedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         if (ownerNameResolved.isNotEmpty) 'ownerName': ownerNameResolved,
-        if (ownerMobileResolved.isNotEmpty) 'ownerMobileNumber': ownerMobileResolved,
+        if (ownerMobileResolved.isNotEmpty)
+          'ownerMobileNumber': ownerMobileResolved,
       };
 
       // Update in all collections using the bookingId directly

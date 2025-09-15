@@ -28,10 +28,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  @override
-  void initState() {
-    super.initState();
-  }
+  final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +38,7 @@ class _MyAppState extends State<MyApp> {
         primaryColor: AppConfig.primaryColor,
         colorScheme: ColorScheme.fromSeed(seedColor: AppConfig.primaryColor),
       ),
+      navigatorKey: _navKey,
       home: const Splashscreen(),
       debugShowCheckedModeBanner: false,
       routes: {

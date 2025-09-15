@@ -49,6 +49,7 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
 
     return Scaffold(
       appBar: AppBar(
+        centerTitle: true,
         title: const Text('My Bookings'),
         bottom: TabBar(
           controller: _tabController,
@@ -83,10 +84,13 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
           final completedKey = BookingStatus.completed.toFirestore();
           final rejectedKey = BookingStatus.rejected.toFirestore();
 
-          final pending = items.where((e) => e['status'] == pendingKey).toList();
-          final active = items.where((e) => e['status'] == acceptedKey).toList();
+          final pending =
+              items.where((e) => e['status'] == pendingKey).toList();
+          final active =
+              items.where((e) => e['status'] == acceptedKey).toList();
           final history = items
-              .where((e) => e['status'] == completedKey || e['status'] == rejectedKey)
+              .where((e) =>
+                  e['status'] == completedKey || e['status'] == rejectedKey)
               .toList();
 
           return TabBarView(
@@ -133,8 +137,11 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
       if (a > 0) return a;
     }
     final propertyData = bookingData['propertyData'] ?? {};
-    final rent = _parsePrice(propertyData['rent'] ?? propertyData['price'] ?? propertyData['monthlyRent']);
-    final deposit = _parsePrice(propertyData['deposit'] ?? propertyData['securityDeposit']);
+    final rent = _parsePrice(propertyData['rent'] ??
+        propertyData['price'] ??
+        propertyData['monthlyRent']);
+    final deposit =
+        _parsePrice(propertyData['deposit'] ?? propertyData['securityDeposit']);
     final computed = rent + deposit;
     if (computed > 0) return computed;
     final paymentInfo = bookingData['paymentInfo'];
