@@ -3,6 +3,7 @@ import 'package:housinghub/Login/SplashScreen.dart';
 import 'package:housinghub/Login/LoginScreen.dart';
 import 'package:housinghub/Other/Owner/OwnerHomeScreen.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:housinghub/firebase_options.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
@@ -17,7 +18,9 @@ void main() async {
     mapsImplementation.useAndroidViewSurface = true;
   }
 
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(MyApp());
 }
 

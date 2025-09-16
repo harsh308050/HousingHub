@@ -21,6 +21,8 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
   final Set<String> _selectedFilters = {};
   RangeValues _priceRange = const RangeValues(3000, 20000);
   double _maxPriceFound = 20000;
+  // Availability: default to available-only, user can include unavailable
+  bool _includeUnavailable = false;
 
   final Map<String, List<String>> _filterOptions = {
     'gender': ['Male Only', 'Female Only', 'Both'],
@@ -86,6 +88,10 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
   List<Map<String, dynamic>> get _filtered {
     final q = _searchCtrl.text.trim().toLowerCase();
     return _all.where((p) {
+      // Availability filter: by default show only available
+      if (!_includeUnavailable) {
+        if (p['isAvailable'] != true) return false;
+      }
       final priceVal = _parsePrice(p['price']);
       if (priceVal < _priceRange.start || priceVal > _priceRange.end) {
         return false;
@@ -139,7 +145,69 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
     }).toList();
   }
 
+  // Apply sorting based on current _sort option
+  List<Map<String, dynamic>> _applySort(List<Map<String, dynamic>> input) {
+    final list = List<Map<String, dynamic>>.from(input);
+    switch (_sort) {
+      case 'Newest':
+        list.sort((a, b) {
+          final ad = _asDateTime(a['createdAt']);
+          final bd = _asDateTime(b['createdAt']);
+          if (ad == null && bd == null) return 0;
+          if (ad == null) return 1; // nulls last
+          if (bd == null) return -1;
+          return bd.compareTo(ad); // newest first
+        });
+        break;
+      case 'Price: Low to High':
+        list.sort((a, b) =>
+            _parsePrice(a['price']).compareTo(_parsePrice(b['price'])));
+        break;
+      case 'Price: High to Low':
+        list.sort((a, b) =>
+            _parsePrice(b['price']).compareTo(_parsePrice(a['price'])));
+        break;
+      case 'Relevance':
+      default:
+        final q = _searchCtrl.text.trim().toLowerCase();
+        if (q.isEmpty) {
+          // Keep server/default order when no query
+          return list;
+        }
+        list.sort((a, b) {
+          final sa = _relevanceScore(a, q);
+          final sb = _relevanceScore(b, q);
+          if (sb != sa) return sb.compareTo(sa); // higher first
+          // tie-breaker: price low to high
+          return _parsePrice(a['price']).compareTo(_parsePrice(b['price']));
+        });
+    }
+    return list;
+  }
+
+  int _relevanceScore(Map<String, dynamic> p, String q) {
+    int s = 0;
+    String str(dynamic v) => (v?.toString().toLowerCase() ?? '');
+    if (str(p['title']).contains(q)) s += 5;
+    if (str(p['address']).contains(q)) s += 4;
+    if (str(p['city']).contains(q)) s += 3;
+    if (str(p['state']).contains(q)) s += 2;
+    if (str(p['description']).contains(q)) s += 1;
+    if (str(p['propertyType']).contains(q)) s += 1;
+    if (str(p['roomType']).contains(q)) s += 1;
+    return s;
+  }
+
+  DateTime? _asDateTime(dynamic v) {
+    if (v == null) return null;
+    if (v is DateTime) return v;
+    if (v is Timestamp) return v.toDate();
+    if (v is String) return DateTime.tryParse(v);
+    return null;
+  }
+
   void _showFiltersSheet() {
+    final width = MediaQuery.of(context).size.width;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -159,10 +227,47 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
                       borderRadius: BorderRadius.circular(2)),
                 ),
                 const SizedBox(height: 16),
-                const Text('Filters',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                Row(
+                  spacing: (width / 3) - 30,
+                  children: [
+                    IconButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                        icon: const Icon(Icons.arrow_back_ios)),
+                    Text('Filters',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w600)),
+                  ],
+                ),
                 const SizedBox(height: 24),
+                // Availability toggle
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline,
+                          size: 18, color: Colors.green),
+                      const SizedBox(width: 8),
+                      const Text('Availability',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87)),
+                      const Spacer(),
+                      Row(children: [
+                        Text('Include Unavailable',
+                            style: TextStyle(
+                                color: Colors.grey[700], fontSize: 12)),
+                        Switch(
+                          value: _includeUnavailable,
+                          activeColor: AppConfig.primaryColor,
+                          onChanged: (v) => setM(() => _includeUnavailable = v),
+                        ),
+                      ])
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text('Price Range',
@@ -200,10 +305,14 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
                         onPressed: () {
                           setState(() {
                             _selectedFilters.clear();
+                            _includeUnavailable = false; // reset to default
                           });
                           Navigator.pop(context);
                         },
-                        child: const Text('Clear'),
+                        child: const Text(
+                          'Clear',
+                          style: TextStyle(color: AppConfig.primaryColor),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -271,6 +380,7 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
+    final sorted = _applySort(filtered);
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       body: SafeArea(
@@ -287,7 +397,7 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
-                  Text('${filtered.length} Properties...',
+                  Text('${sorted.length} Properties...',
                       style: const TextStyle(
                           fontWeight: FontWeight.w600, fontSize: 15)),
                   const Spacer(),
@@ -313,21 +423,16 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
                       onRefresh: _fetchProperties,
                       child: ListView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                        itemCount: filtered.length,
+                        itemCount: sorted.length,
                         itemBuilder: (c, i) => _PropertyResultCard(
-                          data: filtered[i],
-                          onTap: () => _openDetail(filtered[i]),
+                          data: sorted[i],
+                          onTap: () => _openDetail(sorted[i]),
                         ),
                       ),
                     ),
             )
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showFiltersSheet,
-        backgroundColor: AppConfig.primaryColor,
-        child: const Icon(Icons.tune, color: Colors.white),
       ),
     );
   }
@@ -453,6 +558,14 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
         label: parts[1],
         onRemoved: () => setState(() => _selectedFilters.remove(f)),
       ));
+    }
+    if (_includeUnavailable) {
+      chips.add(
+        _RemovableChip(
+          label: 'Include Unavailable',
+          onRemoved: () => setState(() => _includeUnavailable = false),
+        ),
+      );
     }
     if (chips.isEmpty) return const SizedBox.shrink();
     return SizedBox(
@@ -682,7 +795,10 @@ class _PropertyResultCardState extends State<_PropertyResultCard> {
                     spacing: 10,
                     children: [
                       if (available)
-                        _Badge(label: 'Verified', color: Colors.green.shade600),
+                        _Badge(label: 'Available', color: Colors.green.shade600)
+                      else
+                        _Badge(
+                            label: 'Unavailable', color: Colors.red.shade600),
                       if (isNew)
                         _Badge(label: 'New', color: Colors.orange.shade600),
                     ],

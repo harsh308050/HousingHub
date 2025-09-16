@@ -48,6 +48,7 @@ dependencies:
   dropdown_search: ^6.0.2
   url_launcher: ^6.3.2
   geolocator: ^10.1.0
+  rxdart: ^0.27.7
   google_maps_flutter: ^2.5.3
   google_maps_flutter_android: ^2.6.2
   google_maps_flutter_platform_interface: ^2.4.3

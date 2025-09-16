@@ -46,6 +46,8 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
         });
         return;
       }
+      // First, auto-revert any expired bookings so lists reflect reality
+      await Api.autoRevertExpiredBookingsForOwner(user.email!);
       final properties = await Api.getAllOwnerProperties(user.email!);
       setState(() {
         _properties = properties;
@@ -76,7 +78,7 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
             _buildTabBar(),
             Expanded(
               child: _isLoading
-                  ? ShimmerHelper.propertyCardShimmer()
+                  ? ShimmerHelper.ownerPropertyCardShimmer()
                   : _error != null
                       ? Center(child: Text(_error!))
                       : TabBarView(

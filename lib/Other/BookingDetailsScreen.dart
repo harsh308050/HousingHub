@@ -47,6 +47,7 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
+        centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
@@ -229,12 +230,25 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
   String _amountText(double v) => v > 0 ? _inr.format(v) : 'N/A';
 
   Widget _bookingInfoCard(DateTime? checkInDate, double amount) {
+    final checkoutDate = _asDateTime(booking['checkoutDate']) ??
+        ((checkInDate != null && booking['bookingPeriodMonths'] != null)
+            ? _computeCheckoutDate(
+                checkInDate, (booking['bookingPeriodMonths'] as int?) ?? 1)
+            : null);
     return _sectionCard('Booking Information', [
       _row(
           'Check-in Date',
           checkInDate != null
               ? DateFormat('MMM dd, yyyy').format(checkInDate)
               : 'N/A'),
+      _row(
+          'Checkout Date',
+          checkoutDate != null
+              ? DateFormat('MMM dd, yyyy').format(checkoutDate)
+              : 'N/A'),
+      if (booking['bookingPeriodMonths'] != null)
+        _row('Agreement Period',
+            '${(booking['bookingPeriodMonths'] as int? ?? 1)} month(s)'),
       _row('Total Amount', _inr.format(amount)),
       if ((booking['notes'] ?? '').toString().trim().isNotEmpty)
         _row('Notes', booking['notes']),
@@ -349,13 +363,6 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
                       style: TextStyle(
                           color: Colors.green.shade700,
                           fontWeight: FontWeight.w600))),
-              TextButton.icon(
-                onPressed: () => _downloadReceipt(receiptUrl),
-                icon: const Icon(Icons.download),
-                label: const Text('Download'),
-                style: TextButton.styleFrom(
-                    foregroundColor: AppConfig.primaryColor),
-              )
             ],
           ),
         ),
@@ -381,9 +388,15 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
         if (receiptUrl != null) const SizedBox(width: 12),
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: _contactOwner,
-            icon: const Icon(Icons.phone),
-            label: const Text('Contact Owner'),
+            onPressed:
+                widget.viewer == 'owner' ? _contactTenant : _contactOwner,
+            icon: const Icon(
+              Icons.phone,
+              color: AppConfig.primaryColor,
+            ),
+            label: Text(
+                widget.viewer == 'owner' ? 'Contact Tenant' : 'Contact Owner',
+                style: TextStyle(color: AppConfig.primaryColor)),
             style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 side: BorderSide(color: AppConfig.primaryColor)),
@@ -465,7 +478,10 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
         if (url.isNotEmpty)
           TextButton(
             onPressed: () => _openUrl(url),
-            child: const Text('Open'),
+            child: const Text(
+              'Open',
+              style: TextStyle(color: AppConfig.primaryColor),
+            ),
           )
       ]),
     );
@@ -616,6 +632,15 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
     };
     final paymentInfo = Map<String, dynamic>.from(booking['paymentInfo'] ?? {});
     final checkInDate = _asDateTime(booking['checkInDate']) ?? DateTime.now();
+  final DateTime? checkoutDate = _asDateTime(booking['checkoutDate']) ??
+    ((booking['bookingPeriodMonths'] != null)
+      ? _computeCheckoutDate(
+        checkInDate, (booking['bookingPeriodMonths'] as int? ?? 1))
+      : null);
+  final int? bookingPeriodMonths =
+    (booking['bookingPeriodMonths'] is int)
+      ? booking['bookingPeriodMonths'] as int
+      : int.tryParse(booking['bookingPeriodMonths']?.toString() ?? '');
     final paymentDate = _asDateTime(
             paymentInfo['paymentCompletedAt'] ?? booking['createdAt']) ??
         DateTime.now();
@@ -635,6 +660,8 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
       ownerData: ownerData,
       paymentData: paymentInfo,
       checkInDate: checkInDate,
+      checkoutDate: checkoutDate,
+      bookingPeriodMonths: bookingPeriodMonths,
       paymentDate: paymentDate,
       rentAmount: r,
       depositAmount: d,
@@ -691,6 +718,27 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
     }
   }
 
+  void _contactTenant() async {
+    final raw = (tenant['mobileNumber'] ?? '').toString().trim();
+    final phone = _sanitizePhone(raw);
+    if (phone.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Tenant phone number not available')));
+      }
+      return;
+    }
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Unable to open dialer')));
+      }
+    }
+  }
+
   String _sanitizePhone(String input) {
     // Keep leading + and digits
     final trimmed = input.trim();
@@ -729,6 +777,18 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
     final s = price.toString().replaceAll(RegExp(r'[^0-9.]'), '');
     if (s.isEmpty) return 0;
     return double.tryParse(s) ?? 0;
+  }
+
+  static DateTime _computeCheckoutDate(DateTime checkIn, int months) {
+    final y = checkIn.year;
+    final m = checkIn.month;
+    final d = checkIn.day;
+    final nm = m + months;
+    final ny = y + ((nm - 1) ~/ 12);
+    final nmon = ((nm - 1) % 12) + 1;
+    final lastDay = DateTime(ny, nmon + 1, 0).day;
+    final nd = d.clamp(1, lastDay);
+    return DateTime(ny, nmon, nd);
   }
 
   static double _computeTotalAmount(Map<String, dynamic> bookingData) {

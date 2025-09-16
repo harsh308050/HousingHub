@@ -7,6 +7,7 @@ import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/Helper/BookingModels.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:housinghub/Other/Chat/ChatScreen.dart';
 
 class OwnerBookingsScreen extends StatefulWidget {
   const OwnerBookingsScreen({Key? key}) : super(key: key);
@@ -275,7 +276,36 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
 
     final checkInDate = bookingData['checkInDate'] as Timestamp?;
     final createdAt = bookingData['createdAt'] as Timestamp?;
-    final amount = bookingData['amount'] as double? ?? 0.0;
+    // Prefer paid amount from paymentInfo; fallback to computed property total
+    double amount = 0.0;
+    final paymentInfo = bookingData['paymentInfo'] as Map<String, dynamic>?;
+    if (paymentInfo != null && paymentInfo['amount'] != null) {
+      final v = paymentInfo['amount'];
+      amount = v is num
+          ? v.toDouble()
+          : double.tryParse(v.toString().replaceAll(RegExp(r'[^0-9.]'), '')) ??
+              0.0;
+    } else {
+      final rentRaw = propertyData['rent'] ?? propertyData['price'];
+      final depRaw = propertyData['deposit'] ?? propertyData['securityDeposit'];
+      double rent = 0.0;
+      double dep = 0.0;
+      if (rentRaw != null) {
+        rent = rentRaw is num
+            ? rentRaw.toDouble()
+            : double.tryParse(
+                    rentRaw.toString().replaceAll(RegExp(r'[^0-9.]'), '')) ??
+                0.0;
+      }
+      if (depRaw != null) {
+        dep = depRaw is num
+            ? depRaw.toDouble()
+            : double.tryParse(
+                    depRaw.toString().replaceAll(RegExp(r'[^0-9.]'), '')) ??
+                0.0;
+      }
+      amount = rent + dep;
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -380,9 +410,10 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
                             ),
                           ),
                           IconButton(
-                            onPressed: () => _contactTenant(bookingData),
+                            onPressed: () => _openChat(bookingData),
                             icon: const Icon(Icons.chat_bubble_outline),
                             color: AppConfig.primaryColor,
+                            tooltip: 'Open Chat',
                           ),
                         ],
                       ),
@@ -563,17 +594,50 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
   Widget _buildActionButtons(
       Map<String, dynamic> bookingData, BookingStatus status) {
     List<Widget> buttons = [];
+    final ButtonStyle primaryOutlined = OutlinedButton.styleFrom(
+      foregroundColor: AppConfig.primaryColor,
+      side: BorderSide(color: AppConfig.primaryColor, width: 1.2),
+      minimumSize: const Size.fromHeight(44),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      textStyle: const TextStyle(fontWeight: FontWeight.w600),
+    );
+    final ButtonStyle solidBlue = ElevatedButton.styleFrom(
+      backgroundColor: Colors.blue,
+      foregroundColor: Colors.white,
+      minimumSize: const Size.fromHeight(44),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      textStyle: const TextStyle(fontWeight: FontWeight.w600),
+    );
+    final ButtonStyle solidGreen = ElevatedButton.styleFrom(
+      backgroundColor: Colors.green,
+      foregroundColor: Colors.white,
+      minimumSize: const Size.fromHeight(44),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      textStyle: const TextStyle(fontWeight: FontWeight.w600),
+    );
+    final ButtonStyle solidRed = ElevatedButton.styleFrom(
+      backgroundColor: Colors.red,
+      foregroundColor: Colors.white,
+      minimumSize: const Size.fromHeight(44),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      textStyle: const TextStyle(fontWeight: FontWeight.w600),
+    );
+    final ButtonStyle solidPrimary = ElevatedButton.styleFrom(
+      backgroundColor: AppConfig.primaryColor,
+      foregroundColor: Colors.white,
+      minimumSize: const Size.fromHeight(44),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      textStyle: const TextStyle(fontWeight: FontWeight.w600),
+    );
 
     // View Details button - always shown
     buttons.add(
       Expanded(
-        child: OutlinedButton(
+        child: OutlinedButton.icon(
           onPressed: () => _showBookingDetails(bookingData),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppConfig.primaryColor,
-            side: BorderSide(color: AppConfig.primaryColor),
-          ),
-          child: const Text('View Details'),
+          style: primaryOutlined,
+          icon: const Icon(Icons.info_outline),
+          label: const Text('View Details'),
         ),
       ),
     );
@@ -584,26 +648,22 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
         buttons.add(const SizedBox(width: 8));
         buttons.add(
           Expanded(
-            child: ElevatedButton(
+            child: ElevatedButton.icon(
               onPressed: () => _rejectBooking(bookingData),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Reject'),
+              style: solidRed,
+              icon: const Icon(Icons.close_rounded),
+              label: const Text('Reject'),
             ),
           ),
         );
         buttons.add(const SizedBox(width: 8));
         buttons.add(
           Expanded(
-            child: ElevatedButton(
+            child: ElevatedButton.icon(
               onPressed: () => _approveBooking(bookingData),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Approve'),
+              style: solidGreen,
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Text('Approve'),
             ),
           ),
         );
@@ -613,13 +673,11 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
         buttons.add(const SizedBox(width: 8));
         buttons.add(
           Expanded(
-            child: ElevatedButton(
-              onPressed: () => _contactTenant(bookingData),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Contact Tenant'),
+            child: ElevatedButton.icon(
+              onPressed: () => _openChat(bookingData),
+              style: solidBlue,
+              icon: const Icon(Icons.chat_bubble_outline),
+              label: const Text('Contact Tenant'),
             ),
           ),
         );
@@ -627,13 +685,11 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
         buttons.add(const SizedBox(width: 8));
         buttons.add(
           Expanded(
-            child: ElevatedButton(
+            child: ElevatedButton.icon(
               onPressed: () => _markCompleted(bookingData),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppConfig.primaryColor,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Mark Complete'),
+              style: solidPrimary,
+              icon: const Icon(Icons.task_alt),
+              label: const Text('Mark Complete'),
             ),
           ),
         );
@@ -645,13 +701,11 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
           buttons.add(const SizedBox(width: 8));
           buttons.add(
             Expanded(
-              child: OutlinedButton(
-                onPressed: () => _contactTenant(bookingData),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.blue,
-                  side: const BorderSide(color: Colors.blue),
-                ),
-                child: const Text('Contact'),
+              child: OutlinedButton.icon(
+                onPressed: () => _openChat(bookingData),
+                style: primaryOutlined,
+                icon: const Icon(Icons.chat_bubble_outline),
+                label: const Text('Contact'),
               ),
             ),
           );
@@ -690,7 +744,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text('Approve'),
+            child: const Text('Approve', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -741,7 +795,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Reject'),
+            child: const Text('Reject', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -827,19 +881,32 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
     }
   }
 
-  void _contactTenant(Map<String, dynamic> bookingData) {
-    final tenantEmail = bookingData['tenantEmail'];
-    final tenantName =
-        '${bookingData['tenantData']['firstName']} ${bookingData['tenantData']['lastName']}';
+  void _openChat(Map<String, dynamic> bookingData) {
+    final tenantEmail = bookingData['tenantEmail'] as String?;
+    final tenantFirst = (bookingData['tenantData']?['firstName'] ?? '').toString();
+    final tenantLast = (bookingData['tenantData']?['lastName'] ?? '').toString();
+    final tenantName = ('$tenantFirst $tenantLast').trim();
 
-    if (tenantEmail != null) {
-      // Navigate to chat screen (assuming it exists)
+    final ownerEmail = FirebaseAuth.instance.currentUser?.email;
+    if (tenantEmail == null || tenantEmail.isEmpty || ownerEmail == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Opening chat with $tenantName'),
+        const SnackBar(
+          content: Text('Unable to open chat. Missing user information.'),
+          backgroundColor: Colors.red,
         ),
       );
+      return;
     }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          currentEmail: ownerEmail,
+          otherEmail: tenantEmail,
+          otherName: tenantName.isEmpty ? null : tenantName,
+        ),
+      ),
+    );
   }
 }
 

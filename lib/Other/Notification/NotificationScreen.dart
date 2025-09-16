@@ -74,7 +74,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      body: StreamBuilder<dynamic>(
         stream: _useFallbackStream
             ? Api.getNotificationsStreamFallback(_currentUserEmail)
             : Api.getNotificationsStream(_currentUserEmail),
@@ -129,13 +129,29 @@ class _NotificationScreenState extends State<NotificationScreen> {
             );
           }
 
-          List<QueryDocumentSnapshot<Map<String, dynamic>>> notifications =
-              snapshot.data?.docs ?? [];
+          // Handle both QuerySnapshot and List<QueryDocumentSnapshot>
+          List<QueryDocumentSnapshot<Map<String, dynamic>>> notifications = [];
+
+          if (snapshot.data is QuerySnapshot<Map<String, dynamic>>) {
+            // Handle fallback stream (QuerySnapshot)
+            notifications =
+                (snapshot.data as QuerySnapshot<Map<String, dynamic>>).docs;
+          } else if (snapshot.data is List) {
+            // Handle combined stream (List<QueryDocumentSnapshot>)
+            notifications = snapshot.data
+                as List<QueryDocumentSnapshot<Map<String, dynamic>>>;
+          }
 
           // Sort notifications on client side by timestamp (newest first)
           notifications.sort((a, b) {
-            final aTimestamp = a.data()['timestamp'] as Timestamp?;
-            final bTimestamp = b.data()['timestamp'] as Timestamp?;
+            final aData = a.data();
+            final bData = b.data();
+
+            // Handle both timestamp and createdAt fields
+            final aTimestamp =
+                aData['timestamp'] ?? aData['createdAt'] as Timestamp?;
+            final bTimestamp =
+                bData['timestamp'] ?? bData['createdAt'] as Timestamp?;
 
             if (aTimestamp == null && bTimestamp == null) return 0;
             if (aTimestamp == null) return 1;
@@ -237,11 +253,18 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   Widget _buildNotificationItem(Map<String, dynamic> notification) {
     final isRead = notification['isRead'] ?? false;
-    final timestamp = notification['timestamp'] as Timestamp?;
+    final timestamp =
+        notification['timestamp'] ?? notification['createdAt'] as Timestamp?;
+
+    // Handle both chat and booking notifications
+    final type = notification['type'] ?? 'chat_message';
+
+    // For chat notifications
     final title = notification['title'] ?? 'New message';
-    final body = notification['body'] ?? '';
+    final body = notification['body'] ?? notification['message'] ?? '';
     final senderName = notification['senderName'] ?? 'Someone';
     final senderEmail = notification['senderEmail'] ?? '';
+    final isBookingNotification = type.toString().contains('booking');
 
     return Container(
       margin: EdgeInsets.only(bottom: 12),
@@ -263,7 +286,22 @@ class _NotificationScreenState extends State<NotificationScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {
-          _navigateToChat(senderEmail, senderName);
+          if (isBookingNotification) {
+            // Mark as read
+            if (!isRead && notification['notificationId'] != null) {
+              Api.markNotificationAsRead(notification['notificationId']);
+            }
+            // For booking notifications, we don't navigate anywhere yet
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Booking notification viewed'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          } else {
+            // For chat notifications
+            _navigateToChat(senderEmail, senderName);
+          }
         },
         child: Padding(
           padding: EdgeInsets.all(16),
@@ -279,7 +317,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  Icons.chat_bubble_outline,
+                  isBookingNotification
+                      ? Icons.home_work
+                      : Icons.chat_bubble_outline,
                   color: AppConfig.primaryColor,
                   size: 24,
                 ),

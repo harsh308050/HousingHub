@@ -19,6 +19,8 @@ class PdfReceiptGenerator {
     required Map<String, dynamic> ownerData,
     required Map<String, dynamic> paymentData,
     required DateTime checkInDate,
+    DateTime? checkoutDate,
+    int? bookingPeriodMonths,
     required DateTime paymentDate,
     required double rentAmount,
     required double depositAmount,
@@ -40,6 +42,8 @@ class PdfReceiptGenerator {
         ownerData: ownerData,
         paymentData: paymentData,
         checkInDate: checkInDate,
+        checkoutDate: checkoutDate,
+        bookingPeriodMonths: bookingPeriodMonths,
         paymentDate: paymentDate,
         rentAmount: rentAmount,
         depositAmount: depositAmount,
@@ -93,6 +97,8 @@ class PdfReceiptGenerator {
     required Map<String, dynamic> ownerData,
     required Map<String, dynamic> paymentData,
     required DateTime checkInDate,
+    DateTime? checkoutDate,
+    int? bookingPeriodMonths,
     required DateTime paymentDate,
     required double rentAmount,
     required double depositAmount,
@@ -113,6 +119,8 @@ class PdfReceiptGenerator {
       ownerData: ownerData,
       paymentData: paymentData,
       checkInDate: checkInDate,
+      checkoutDate: checkoutDate,
+      bookingPeriodMonths: bookingPeriodMonths,
       paymentDate: paymentDate,
       rentAmount: rentAmount,
       depositAmount: depositAmount,
@@ -129,6 +137,8 @@ class PdfReceiptGenerator {
     required Map<String, dynamic> ownerData,
     required Map<String, dynamic> paymentData,
     required DateTime checkInDate,
+    DateTime? checkoutDate,
+    int? bookingPeriodMonths,
     required DateTime paymentDate,
     required double rentAmount,
     required double depositAmount,
@@ -210,7 +220,7 @@ class PdfReceiptGenerator {
           pw.SizedBox(height: 30),
 
           // Booking Details
-          _buildBookingDetails(checkInDate, paymentDate, font, fontBold),
+          _buildBookingDetails(checkInDate, checkoutDate, bookingPeriodMonths, paymentDate, font, fontBold),
           pw.SizedBox(height: 30),
 
           // Payment Table
@@ -438,6 +448,8 @@ class PdfReceiptGenerator {
 
   static pw.Widget _buildBookingDetails(
     DateTime checkInDate,
+    DateTime? checkoutDate,
+    int? bookingPeriodMonths,
     DateTime paymentDate,
     pw.Font font,
     pw.Font fontBold,
@@ -465,6 +477,16 @@ class PdfReceiptGenerator {
                   'Move-in Date: ${DateFormat('MMM dd, yyyy').format(checkInDate)}',
                   style: pw.TextStyle(font: font, fontSize: 12),
                 ),
+                if (checkoutDate != null)
+                  pw.Text(
+                    'Checkout Date: ${DateFormat('MMM dd, yyyy').format(checkoutDate)}',
+                    style: pw.TextStyle(font: font, fontSize: 12),
+                  ),
+                if (bookingPeriodMonths != null)
+                  pw.Text(
+                    'Agreement Period: ${bookingPeriodMonths} month(s)',
+                    style: pw.TextStyle(font: font, fontSize: 12),
+                  ),
               ],
             ),
           ),

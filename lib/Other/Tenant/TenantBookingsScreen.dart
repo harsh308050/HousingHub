@@ -400,7 +400,7 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
         break;
 
       case BookingStatus.accepted:
-        // For accepted bookings, only contact and view options are available
+        // For accepted bookings, allow contacting owner only
         buttons.add(const SizedBox(width: 8));
         buttons.add(
           Expanded(
@@ -410,7 +410,7 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
               ),
-              child: const Text('Confirm'),
+              child: const Text('Contact Owner'),
             ),
           ),
         );

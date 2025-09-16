@@ -34,6 +34,7 @@ class _BookingScreenState extends State<BookingScreen>
   // Form controllers and data
   final _formKey = GlobalKey<FormState>();
   DateTime? _selectedCheckInDate;
+  int? _selectedPeriodMonths; // selected booking duration in months
 
   // Tenant information
   Map<String, dynamic> _tenantData = {};
@@ -68,6 +69,7 @@ class _BookingScreenState extends State<BookingScreen>
   String? _paymentSignature;
   DateTime? _paymentCompletedAt;
   bool _isSubmitting = false;
+  bool _isUnavailable = false;
 
   // Notes
   final TextEditingController _notesController = TextEditingController();
@@ -86,6 +88,7 @@ class _BookingScreenState extends State<BookingScreen>
     _initializeRazorpay();
     _loadTenantData();
     _loadTenantDocuments();
+    _checkAvailability();
     _animationController.forward();
   }
 
@@ -191,6 +194,14 @@ class _BookingScreenState extends State<BookingScreen>
   }
 
   void _nextStep() {
+    if (_isUnavailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'This property is no longer available for booking.')),
+      );
+      return;
+    }
     if (_currentStep < _totalSteps - 1) {
       if (_validateCurrentStep()) {
         setState(() {
@@ -219,7 +230,7 @@ class _BookingScreenState extends State<BookingScreen>
   bool _validateCurrentStep() {
     switch (_currentStep) {
       case 0: // Property & Move-in Details
-        return _selectedCheckInDate != null;
+        return _selectedCheckInDate != null && _selectedPeriodMonths != null;
       case 1: // Tenant Information
         return _firstNameController.text.isNotEmpty &&
             _lastNameController.text.isNotEmpty &&
@@ -245,6 +256,14 @@ class _BookingScreenState extends State<BookingScreen>
   }
 
   Future<void> _submitBooking() async {
+    if (_isUnavailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'This property is no longer available for booking.')),
+      );
+      return;
+    }
     await LoadingStateManager.runWithLoader<Map<String, dynamic>?>(
       context: context,
       loadingState: (loading) {
@@ -256,6 +275,22 @@ class _BookingScreenState extends State<BookingScreen>
         final user = FirebaseAuth.instance.currentUser;
         if (user?.email == null) {
           throw Exception('User not authenticated');
+        }
+
+        // Final availability check just before creating booking
+        try {
+          final ownerEmail = widget.propertyData['ownerEmail']?.toString();
+          final propertyId = widget.propertyData['id']?.toString();
+          if (ownerEmail != null && ownerEmail.isNotEmpty &&
+              propertyId != null && propertyId.isNotEmpty) {
+            final data = await Api.getPropertyById(ownerEmail, propertyId,
+                checkUnavailable: true);
+            if (data == null || data['isAvailable'] != true) {
+              throw Exception('Property is unavailable');
+            }
+          }
+        } catch (e) {
+          throw Exception('Property is unavailable');
         }
 
         // Prepare booking data
@@ -318,6 +353,7 @@ class _BookingScreenState extends State<BookingScreen>
           tenantData: tenantData.toMap(),
           idProof: allDocuments, // Use all documents
           checkInDate: _selectedCheckInDate!,
+          bookingPeriodMonths: _selectedPeriodMonths ?? 1,
           amount: propertyData.totalAmount,
           ownerName: ownerNameField.isNotEmpty ? ownerNameField : null,
           ownerMobileNumber:
@@ -362,6 +398,17 @@ class _BookingScreenState extends State<BookingScreen>
                 'currency': 'INR',
               },
               checkInDate: _selectedCheckInDate!,
+              checkoutDate: (() {
+                final ci = _selectedCheckInDate!;
+                final months = _selectedPeriodMonths ?? 1;
+                final nm = ci.month + months;
+                final ny = ci.year + ((nm - 1) ~/ 12);
+                final nmon = ((nm - 1) % 12) + 1;
+                final lastDay = DateTime(ny, nmon + 1, 0).day;
+                final nd = ci.day.clamp(1, lastDay);
+                return DateTime(ny, nmon, nd);
+              })(),
+              bookingPeriodMonths: _selectedPeriodMonths ?? 1,
               paymentDate: _paymentCompletedAt!,
               rentAmount: rentAmount,
               depositAmount: depositAmount,
@@ -529,6 +576,9 @@ class _BookingScreenState extends State<BookingScreen>
   Widget _buildPropertyDetailsStep() {
     final rent = _parsePrice(widget.propertyData['price']);
     final deposit = _parsePrice(widget.propertyData['securityDeposit']);
+    final minMonths =
+        _minBookingMonths(widget.propertyData['minimumBookingPeriod']);
+    final options = _allowedPeriodOptions(minMonths);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -699,6 +749,58 @@ class _BookingScreenState extends State<BookingScreen>
               ),
             ),
           ),
+          const SizedBox(height: 16),
+          // Booking period selection
+          Text(
+            'Select Booking Period',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _selectedPeriodMonths != null
+                    ? AppConfig.primaryColor
+                    : Colors.grey[300]!,
+              ),
+            ),
+            child: DropdownButton<int>(
+              value: _selectedPeriodMonths,
+              isExpanded: true,
+              underline: const SizedBox.shrink(),
+              hint: const Text('Select period (months)'),
+              items: options
+                  .map((m) => DropdownMenuItem<int>(
+                        value: m,
+                        child: Text('$m month${m > 1 ? 's' : ''}'),
+                      ))
+                  .toList(),
+              onChanged: (val) {
+                setState(() => _selectedPeriodMonths = val);
+              },
+            ),
+          ),
+          if (_selectedCheckInDate != null && _selectedPeriodMonths != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.event_available,
+                      size: 18, color: AppConfig.primaryColor),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Checkout Date: ${DateFormat('MMM dd, yyyy').format(_computeCheckoutDate(_selectedCheckInDate!, _selectedPeriodMonths!))}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -1110,6 +1212,10 @@ class _BookingScreenState extends State<BookingScreen>
 
     switch (required) {
       case 'proof of identity':
+        // Exclude any passport-size photograph entries
+        final isPhoto = (doc.contains('photo') || doc.contains('photograph')) &&
+            doc.contains('passport');
+        if (isPhoto) return false;
         return doc.contains('aadhaar') ||
             doc.contains('passport') ||
             doc.contains('voter') ||
@@ -1379,7 +1485,17 @@ class _BookingScreenState extends State<BookingScreen>
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () => _makePayment(total),
+                onPressed: () {
+                  if (_isUnavailable) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text(
+                              'This property is no longer available for booking.')),
+                    );
+                    return;
+                  }
+                  _makePayment(total);
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppConfig.primaryColor,
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1446,6 +1562,10 @@ class _BookingScreenState extends State<BookingScreen>
   Widget _buildReviewStep() {
     final rent = _parsePrice(widget.propertyData['price']);
     final deposit = _parsePrice(widget.propertyData['securityDeposit']);
+    final checkout = (_selectedCheckInDate != null &&
+            _selectedPeriodMonths != null)
+        ? _computeCheckoutDate(_selectedCheckInDate!, _selectedPeriodMonths!)
+        : null;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -1485,6 +1605,12 @@ class _BookingScreenState extends State<BookingScreen>
                   _selectedCheckInDate != null
                       ? DateFormat('MMM dd, yyyy').format(_selectedCheckInDate!)
                       : ''),
+              if (_selectedPeriodMonths != null)
+                _buildReviewItem('Period',
+                    '${_selectedPeriodMonths} month${(_selectedPeriodMonths ?? 1) > 1 ? 's' : ''}'),
+              if (checkout != null)
+                _buildReviewItem('Checkout Date',
+                    DateFormat('MMM dd, yyyy').format(checkout)),
             ],
           ),
 
@@ -1796,6 +1922,14 @@ class _BookingScreenState extends State<BookingScreen>
   }
 
   void _makePayment(double amount) {
+    if (_isUnavailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'This property is no longer available for booking.')),
+      );
+      return;
+    }
     var options = {
       'key': 'rzp_test_1DP5mmOlF5G5ag', // Replace with your Razorpay key
       'amount': (amount * 100).toInt(), // Razorpay accepts amount in paisa
@@ -1844,11 +1978,68 @@ class _BookingScreenState extends State<BookingScreen>
     return availableGenders;
   }
 
+  Future<void> _checkAvailability() async {
+    try {
+      final ownerEmail = widget.propertyData['ownerEmail']?.toString();
+      final propertyId = widget.propertyData['id']?.toString();
+      if (ownerEmail == null || ownerEmail.isEmpty ||
+          propertyId == null || propertyId.isEmpty) return;
+
+      // Respect inline data if explicitly unavailable
+      if (widget.propertyData['isAvailable'] == false ||
+          widget.propertyData['available'] == false) {
+        if (!mounted) return;
+        setState(() => _isUnavailable = true);
+        return;
+      }
+
+      final data = await Api.getPropertyById(ownerEmail, propertyId,
+          checkUnavailable: true);
+      if (!mounted) return;
+      setState(() {
+        _isUnavailable = (data == null || data['isAvailable'] != true);
+      });
+    } catch (e) {
+      // Ignore errors, default to available
+    }
+  }
+
   double _parsePrice(dynamic price) {
     if (price == null) return 0;
     if (price is num) return price.toDouble();
     final s = price.toString().replaceAll(RegExp(r'[^0-9.]'), '');
     if (s.isEmpty) return 0;
     return double.tryParse(s) ?? 0;
+  }
+
+  // Helpers for booking period
+  int _minBookingMonths(dynamic raw) {
+    if (raw == null) return 1;
+    final s = raw.toString().toLowerCase().trim();
+    final match = RegExp(r'(\d+)').firstMatch(s);
+    if (match != null) {
+      final v = int.tryParse(match.group(1)!);
+      if (v != null && v > 0) return v;
+    }
+    if (s.contains('year')) return 12;
+    if (s.contains('month')) return 1;
+    return 1;
+  }
+
+  List<int> _allowedPeriodOptions(int minMonths) {
+    final base = [1, 3, 6, 12];
+    return base.where((m) => m >= minMonths).toList();
+  }
+
+  DateTime _computeCheckoutDate(DateTime checkIn, int months) {
+    final y = checkIn.year;
+    final m = checkIn.month;
+    final d = checkIn.day;
+    final nm = m + months;
+    final ny = y + ((nm - 1) ~/ 12);
+    final nmon = ((nm - 1) % 12) + 1;
+    final lastDay = DateTime(ny, nmon + 1, 0).day;
+    final nd = d.clamp(1, lastDay);
+    return DateTime(ny, nmon, nd);
   }
 }

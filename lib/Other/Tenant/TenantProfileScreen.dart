@@ -497,68 +497,93 @@ class _DocumentTileState extends State<_DocumentTile> {
         final isUploaded = status.toLowerCase() == 'uploaded';
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 10),
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(12),
           decoration: _cardDecoration(),
-          child: ListTile(
-            leading: const Icon(Icons.insert_drive_file_outlined,
-                color: Colors.black87),
-            title: Text(widget.label),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (widget.options.length > 1)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: DropdownButton<String>(
-                      value: _selectedOption ?? option,
-                      hint: const Text('Select type'),
-                      items: widget.options
-                          .map(
-                              (o) => DropdownMenuItem(value: o, child: Text(o)))
-                          .toList(),
-                      onChanged: (v) => setState(() => _selectedOption = v),
-                      isExpanded: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Icon(Icons.insert_drive_file_outlined,
+                      color: Colors.black87),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      widget.label,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                Row(
-                  children: [
-                    _StatusChip(
-                      label: isUploaded ? 'Uploaded' : 'Not uploaded',
-                      color: isUploaded ? const Color(0xFF1976D2) : Colors.grey,
-                    ),
-                    if (option != null && option.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: Text(option,
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.grey)),
-                      ),
-                  ],
+                  _StatusChip(
+                    label: isUploaded ? 'Uploaded' : 'Not uploaded',
+                    color: isUploaded ? const Color(0xFF1976D2) : Colors.grey,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              if (widget.options.length > 1)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: DropdownButton<String>(
+                    value: _selectedOption ?? option,
+                    isExpanded: true,
+                    underline: const SizedBox.shrink(),
+                    hint: const Text('Select type'),
+                    items: widget.options
+                        .map((o) => DropdownMenuItem(value: o, child: Text(o)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _selectedOption = v),
+                  ),
                 ),
-              ],
-            ),
-            trailing: _uploading
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (url != null)
-                        IconButton(
-                          icon: const Icon(Icons.visibility_outlined),
-                          onPressed: () => _showImage(context, url),
-                          tooltip: 'View',
-                        ),
-                      IconButton(
-                        icon: const Icon(Icons.upload_outlined),
-                        onPressed: _pickAndUpload,
-                        tooltip: url == null ? 'Upload' : 'Replace',
+              if (widget.options.length > 1) const SizedBox(height: 10),
+              Row(
+                children: [
+                  if (option != null && option.isNotEmpty)
+                    Expanded(
+                      child: Text(
+                        option,
+                        style:
+                            const TextStyle(fontSize: 12, color: Colors.grey),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ],
-                  ),
+                    ),
+                  const SizedBox(width: 8),
+                  if (_uploading)
+                    const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (url != null)
+                          IconButton(
+                            icon: const Icon(Icons.visibility_outlined),
+                            onPressed: () => _showImage(context, url),
+                            tooltip: 'View',
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.upload_outlined),
+                          onPressed: _pickAndUpload,
+                          tooltip: url == null ? 'Upload' : 'Replace',
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ],
           ),
         );
       },
@@ -867,7 +892,7 @@ class _BookingsTab extends StatelessWidget {
       }
     }
 
-    return Container(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [

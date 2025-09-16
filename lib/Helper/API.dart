@@ -8,6 +8,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
 import 'dart:developer' as developer;
+import 'package:rxdart/rxdart.dart' as rx;
 
 // Property model class
 class Property {
@@ -2784,25 +2785,50 @@ class Api {
     }
   }
 
-  // Get notifications for a user
-  static Stream<QuerySnapshot<Map<String, dynamic>>> getNotificationsStream(
+  // Get notifications for a user - handles both chat and booking notifications
+  static Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>> getNotificationsStream(
       String userEmail) {
-    // Simplified query without orderBy to avoid composite index requirement
-    return _firestore
-        .collection('Notifications')
-        .where('receiverEmail', isEqualTo: userEmail)
-        .limit(100) // Reasonable limit to prevent excessive data loading
-        .snapshots()
-        .handleError((error) {
-      print('Error in notification stream: $error');
-      // If any error occurs, fall back to basic query
-      return getNotificationsStreamFallback(userEmail);
-    });
+    try {
+      // Use a query that can handle both receiverEmail (chat) and recipientEmail (booking)
+      // We need to use two separate queries and merge the results
+      Stream<QuerySnapshot<Map<String, dynamic>>> chatNotifications = _firestore
+          .collection('Notifications')
+          .where('receiverEmail', isEqualTo: userEmail)
+          .limit(100)
+          .snapshots();
+          
+      Stream<QuerySnapshot<Map<String, dynamic>>> bookingNotifications = _firestore
+          .collection('Notifications')
+          .where('recipientEmail', isEqualTo: userEmail)
+          .limit(100)
+          .snapshots();
+          
+      // Merge the two streams
+      return rx.CombineLatestStream.combine2(
+          chatNotifications,
+          bookingNotifications,
+          (QuerySnapshot<Map<String, dynamic>> chatSnap,
+              QuerySnapshot<Map<String, dynamic>> bookingSnap) {
+        // Combine both results into a single list
+        return [...chatSnap.docs, ...bookingSnap.docs];
+      }).handleError((error) {
+        print('Error in notification stream: $error');
+        // If any error occurs, fall back to basic query
+        return getNotificationsStreamFallback(userEmail)
+            .map((snapshot) => snapshot.docs.toList());
+      });  
+    } catch (e) {
+      print('Error setting up notification streams: $e');
+      return getNotificationsStreamFallback(userEmail)
+          .map((snapshot) => snapshot.docs.toList());
+    }
   }
 
   // Get notifications for a user (fallback without ordering)
   static Stream<QuerySnapshot<Map<String, dynamic>>>
       getNotificationsStreamFallback(String userEmail) {
+    // Simple fallback that only checks receiverEmail
+    // This is used if the combined stream approach fails
     return _firestore
         .collection('Notifications')
         .where('receiverEmail', isEqualTo: userEmail)
@@ -2820,20 +2846,40 @@ class Api {
     }
   }
 
-  // Mark all notifications as read for a user
+  // Mark all notifications as read for a user - handles both chat and booking notifications
   static Future<void> markAllNotificationsAsRead(String userEmail) async {
     try {
-      final notifications = await _firestore
+      // Get chat notifications
+      final chatNotifications = await _firestore
           .collection('Notifications')
           .where('receiverEmail', isEqualTo: userEmail)
           .where('isRead', isEqualTo: false)
           .get();
 
+      // Get booking notifications
+      final bookingNotifications = await _firestore
+          .collection('Notifications')
+          .where('recipientEmail', isEqualTo: userEmail)
+          .where('isRead', isEqualTo: false)
+          .get();
+
+      // Create a batch to update all notifications
       final batch = _firestore.batch();
-      for (final doc in notifications.docs) {
+      
+      // Add chat notifications to batch
+      for (final doc in chatNotifications.docs) {
         batch.update(doc.reference, {'isRead': true});
       }
+      
+      // Add booking notifications to batch
+      for (final doc in bookingNotifications.docs) {
+        batch.update(doc.reference, {'isRead': true});
+      }
+      
+      // Commit the batch
       await batch.commit();
+      
+      print('Marked ${chatNotifications.docs.length + bookingNotifications.docs.length} notifications as read');
     } catch (e) {
       print('Error marking all notifications as read: $e');
     }
@@ -2871,6 +2917,7 @@ class Api {
     required Map<String, dynamic> tenantData,
     required Map<String, dynamic> idProof,
     required DateTime checkInDate,
+    int bookingPeriodMonths = 1,
     required double amount,
     String? ownerName,
     String? ownerMobileNumber,
@@ -2928,6 +2975,10 @@ class Api {
         }
       }
 
+      // Compute checkout date
+      final DateTime checkoutDate =
+          _computeCheckoutDate(checkInDate, bookingPeriodMonths);
+
       final bookingData = {
         'bookingId': bookingId,
         'tenantEmail': tenantEmail,
@@ -2955,6 +3006,8 @@ class Api {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'checkInDate': Timestamp.fromDate(checkInDate),
+        'checkoutDate': Timestamp.fromDate(checkoutDate),
+        'bookingPeriodMonths': bookingPeriodMonths,
         'notes': notes,
       };
 
@@ -2992,6 +3045,19 @@ class Api {
       print('Error creating booking: $e');
       throw Exception('Failed to create booking: $e');
     }
+  }
+
+  // Helper: compute checkout date by adding months
+  static DateTime _computeCheckoutDate(DateTime checkIn, int months) {
+    final y = checkIn.year;
+    final m = checkIn.month;
+    final d = checkIn.day;
+    final nm = m + months;
+    final ny = y + ((nm - 1) ~/ 12);
+    final nmon = ((nm - 1) % 12) + 1;
+    final lastDay = DateTime(ny, nmon + 1, 0).day;
+    final nd = d.clamp(1, lastDay);
+    return DateTime(ny, nmon, nd);
   }
 
   // Update booking status (approve/reject)
@@ -3032,11 +3098,58 @@ class Api {
       final bookingData = bookingDoc.data()!;
       final propertyId = bookingData['propertyId'] as String?;
 
-      // Handle property availability changes when booking is approved
-      if (newStatus == 'Approved' && propertyId != null) {
+      // Handle property availability changes when booking is approved/accepted
+      if ((newStatus == 'Approved' || newStatus == 'Accepted') && propertyId != null) {
         // Mark property as unavailable since booking is approved
         try {
-          await markPropertyAsUnavailable(propertyId);
+          // Prepare tenant snapshot and period/date info
+          final tenantData = Map<String, dynamic>.from(
+              bookingData['tenantData'] as Map<String, dynamic>? ?? {});
+          tenantData['tenantEmail'] = tenantEmail;
+
+          DateTime checkIn = DateTime.now();
+          final ciRaw = bookingData['checkInDate'];
+          if (ciRaw is Timestamp) checkIn = ciRaw.toDate();
+          if (ciRaw is String) {
+            final parsed = DateTime.tryParse(ciRaw);
+            if (parsed != null) checkIn = parsed;
+          }
+          final period = (bookingData['bookingPeriodMonths'] is int)
+              ? bookingData['bookingPeriodMonths'] as int
+              : 1;
+          final checkout = (bookingData['checkoutDate'] is Timestamp)
+              ? (bookingData['checkoutDate'] as Timestamp).toDate()
+              : _computeCheckoutDate(checkIn, period);
+
+          // Derive rent/securityDeposit for snapshot
+          final Map<String, dynamic> prop =
+              Map<String, dynamic>.from(bookingData['propertyData'] ?? {});
+          final double rentAmount = (() {
+            final v = prop['rent'] ?? prop['price'] ?? prop['monthlyRent'];
+            if (v is num) return v.toDouble();
+            final s = v?.toString().replaceAll(RegExp(r'[^0-9.]'), '') ?? '';
+            return s.isEmpty ? 0.0 : (double.tryParse(s) ?? 0.0);
+          })();
+          final double depositAmount = (() {
+            final v = prop['deposit'] ?? prop['securityDeposit'];
+            if (v is num) return v.toDouble();
+            final s = v?.toString().replaceAll(RegExp(r'[^0-9.]'), '') ?? '';
+            return s.isEmpty ? 0.0 : (double.tryParse(s) ?? 0.0);
+          })();
+
+          final updatedData = <String, dynamic>{
+            'currentTenant': tenantData,
+            'currentBookingId': bookingId,
+            'currentBookingStatus': 'Approved',
+            'checkInDate': Timestamp.fromDate(checkIn),
+            'checkoutDate': Timestamp.fromDate(checkout),
+            'bookingPeriodMonths': period,
+            'autoRevertAt': Timestamp.fromDate(checkout),
+            'currentRent': rentAmount,
+            'currentSecurityDeposit': depositAmount,
+          };
+
+          await markPropertyAsUnavailable(propertyId, updatedData);
           print(
               'Property $propertyId marked as unavailable after booking approval');
 
@@ -3132,6 +3245,37 @@ class Api {
     } catch (e) {
       print('Error updating booking status: $e');
       throw Exception('Failed to update booking status: $e');
+    }
+  }
+
+  // Auto revert properties whose booking period has ended back to Available
+  static Future<void> autoRevertExpiredBookingsForOwner(
+      String ownerEmail) async {
+    try {
+      final now = Timestamp.fromDate(DateTime.now());
+      final unavailSnap = await _firestore
+          .collection('Properties')
+          .doc(ownerEmail)
+          .collection('Unavailable')
+          .where('autoRevertAt', isLessThanOrEqualTo: now)
+          .get();
+
+      for (final doc in unavailSnap.docs) {
+        final propertyId = doc.id;
+        try {
+          await markPropertyAsAvailable(propertyId, {
+            'currentTenant': null,
+            'currentBookingId': null,
+            'currentBookingStatus': null,
+            'autoRevertAt': null,
+          });
+          print('Auto-reverted property $propertyId to Available');
+        } catch (e) {
+          print('Warning: Failed to auto-revert $propertyId: $e');
+        }
+      }
+    } catch (e) {
+      print('Error during auto-revert check: $e');
     }
   }
 
@@ -3597,14 +3741,34 @@ class Api {
     }
   }
 
-  // Get notification count stream
+  // Get notification count stream - handles both chat and booking notifications
   static Stream<int> getUnreadNotificationCountStream(String userEmail) {
-    return _firestore
+    // Get unread chat notifications count
+    Stream<QuerySnapshot<Map<String, dynamic>>> chatNotifications = _firestore
         .collection('Notifications')
         .where('receiverEmail', isEqualTo: userEmail)
         .where('isRead', isEqualTo: false)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.length);
+        .snapshots();
+        
+    // Get unread booking notifications count
+    Stream<QuerySnapshot<Map<String, dynamic>>> bookingNotifications = _firestore
+        .collection('Notifications')
+        .where('recipientEmail', isEqualTo: userEmail)
+        .where('isRead', isEqualTo: false)
+        .snapshots();
+        
+    // Combine both streams and return the total count
+    return rx.CombineLatestStream.combine2(
+        chatNotifications,
+        bookingNotifications,
+        (QuerySnapshot<Map<String, dynamic>> chatSnap,
+            QuerySnapshot<Map<String, dynamic>> bookingSnap) {
+      return chatSnap.docs.length + bookingSnap.docs.length;
+    }).handleError((error) {
+      print('Error in unread notification count stream: $error');
+      // Fallback to just chat notifications if there's an error
+      return 0;
+    });
   }
 
   // Delete old notifications (older than 30 days)

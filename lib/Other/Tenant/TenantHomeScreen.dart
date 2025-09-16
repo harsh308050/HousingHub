@@ -978,11 +978,11 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                                           _showCityPicker = true;
                                         });
                                       },
-                                      child: Text('Change City'),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: AppConfig.primaryColor,
                                         foregroundColor: Colors.white,
                                       ),
+                                      child: Text('Change City'),
                                     ),
                                   ],
                                 ),
@@ -1025,7 +1025,8 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                     onPressed: () {
                       // Navigate to all recently viewed properties
                     },
-                    child: Text('See All'),
+                    child: Text('See All',
+                        style: TextStyle(color: AppConfig.primaryColor)),
                   ),
                 ],
               ),

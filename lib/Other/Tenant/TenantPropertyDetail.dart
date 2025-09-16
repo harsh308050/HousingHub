@@ -39,6 +39,9 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
   bool _isVideoSelected = false;
   VideoPlayerController? _videoController;
   Future<void>? _initializeVideoFuture;
+  // Availability state
+  bool _isUnavailable = false;
+  // Note: we don't currently render a loading state for availability check
 
   // Sample images for the thumbnail gallery
   List<String> roomImages = [
@@ -66,6 +69,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
 
     // Load property data
     _loadPropertyData();
+  _checkAvailability();
     _checkIfSaved();
     _trackPropertyView();
 
@@ -207,6 +211,38 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
       }).catchError((e) {
         print('Error fetching owner by UID fallback: $e');
       });
+    }
+  }
+
+  Future<void> _checkAvailability() async {
+    try {
+      final propertyId = widget.propertyData?['id'] ?? widget.propertyId;
+      final ownerEmail = widget.propertyData?['ownerEmail']?.toString();
+      if (propertyId == null || ownerEmail == null || ownerEmail.isEmpty) {
+        return;
+      }
+
+      // If property data explicitly says unavailable, respect it
+      if ((widget.propertyData?['isAvailable'] == false) ||
+          (widget.propertyData?['available'] == false)) {
+        setState(() {
+          _isUnavailable = true;
+        });
+        return;
+      }
+
+      // no-op loading flag
+      final data = await Api.getPropertyById(ownerEmail, propertyId,
+          checkUnavailable: true);
+      if (!mounted) return;
+      setState(() {
+        // If found and isAvailable is not true, mark as unavailable
+        _isUnavailable = (data != null && data['isAvailable'] != true);
+      });
+    } catch (e) {
+      // Fail open (allow booking) but log error
+      debugPrint('Error checking availability: $e');
+      if (!mounted) return;
     }
   }
 
@@ -787,9 +823,21 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                   Expanded(
                     flex: 2,
                     child: ElevatedButton(
-                      onPressed: () => _navigateToBooking(),
+                      onPressed: () {
+                        if (_isUnavailable) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text(
+                                    'This property is not available for booking.')),
+                          );
+                          return;
+                        }
+                        _navigateToBooking();
+                      },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppConfig.primaryColor,
+                        backgroundColor: _isUnavailable
+                            ? Colors.grey
+                            : AppConfig.primaryColor,
                         foregroundColor: Colors.white,
                         padding: EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
@@ -797,7 +845,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                         ),
                       ),
                       child: Text(
-                        'Book Now',
+                        _isUnavailable ? 'Not Available' : 'Book Now',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -1281,6 +1329,15 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
       return;
     }
 
+    if (_isUnavailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content:
+                Text('This property is not available for booking.')),
+      );
+      return;
+    }
+
     // Validate required property data
     if (widget.propertyData == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1290,7 +1347,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
     }
 
     try {
-      final result = await Navigator.push<bool>(
+      await Navigator.push<bool>(
         context,
         MaterialPageRoute(
           builder: (context) => BookingScreen(
@@ -1298,16 +1355,6 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
           ),
         ),
       );
-
-      // If booking was successful, show confirmation
-      if (result == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Booking request submitted successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
