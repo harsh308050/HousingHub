@@ -2159,6 +2159,11 @@ class Api {
         final dataToSave = Map<String, dynamic>.from(propertyData);
         dataToSave['propertyId'] = propertyId;
         dataToSave['viewedAt'] = FieldValue.serverTimestamp();
+        // Make sure ownerEmail exists for collectionGroup aggregations
+        final ownerEmail = (propertyData['ownerEmail']?.toString() ?? '').trim().toLowerCase();
+        if (ownerEmail.isNotEmpty) {
+          dataToSave['ownerEmail'] = ownerEmail;
+        }
 
         tx.set(propertyDoc, dataToSave, SetOptions(merge: true));
 
@@ -2408,6 +2413,63 @@ class Api {
         .orderBy('viewedAt', descending: true)
         .limit(limit)
         .snapshots();
+  }
+
+  // Get live count of unique views for an owner across all properties.
+  // Definition of a unique view: one tenant viewing one property at least once.
+  // Implementation detail:
+  // - Each tenant has at most one document per property in Tenants/{email}/RecentViews/{propertyId}
+  // - We store ownerEmail inside each RecentViews document (via propertyData)
+  // - Therefore, the total number of RecentViews docs filtered by ownerEmail equals unique (tenant, property) pairs
+  static Stream<int> streamOwnerUniqueViewsCount(String ownerEmail) {
+    if (ownerEmail.isEmpty) return Stream.value(0);
+    final owner = ownerEmail.trim().toLowerCase();
+    try {
+      // Primary source: OwnerViews/{owner}/Unique -> one doc per (tenant, property)
+      return _firestore
+          .collection('OwnerViews')
+          .doc(owner)
+          .collection('Unique')
+          .snapshots()
+          .map((snap) => snap.docs.length)
+          .handleError((e) {
+        developer.log('Error streaming OwnerViews unique count: $e');
+        return 0;
+      });
+    } catch (e) {
+      developer.log('OwnerViews stream setup failed: $e');
+      return Stream.value(0);
+    }
+  }
+
+  // Track a unique view for an owner by a tenant for a property.
+  // Idempotent: uses docId = propertyId__tenantEmail to ensure one per pair.
+  static Future<void> trackUniqueOwnerView({
+    required String ownerEmail,
+    required String tenantEmail,
+    required String propertyId,
+  }) async {
+    if (ownerEmail.isEmpty || tenantEmail.isEmpty || propertyId.isEmpty) return;
+    try {
+      final owner = ownerEmail.trim().toLowerCase();
+      final tenant = tenantEmail.trim().toLowerCase();
+      final docId = '${propertyId}__${tenant}';
+      final ref = _firestore
+          .collection('OwnerViews')
+          .doc(owner)
+          .collection('Unique')
+          .doc(docId);
+
+      await ref.set({
+        'ownerEmail': owner,
+        'tenantEmail': tenant,
+        'propertyId': propertyId,
+        'viewedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      developer.log('Error tracking unique owner view: $e');
+      // non-critical, swallow
+    }
   }
 
   // Get user profile information (name and profile picture) by email

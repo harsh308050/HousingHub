@@ -216,11 +216,7 @@ class _SavedCard extends StatelessWidget {
   const _SavedCard(
       {required this.data, required this.onOpen, required this.onToggleSave});
 
-  double _parseRating(dynamic r) {
-    if (r == null) return 0;
-    if (r is num) return r.toDouble();
-    return double.tryParse(r.toString()) ?? 0;
-  }
+  // Ratings removed
 
   @override
   Widget build(BuildContext context) {
@@ -235,7 +231,7 @@ class _SavedCard extends StatelessWidget {
         .whereType<String>()
         .where((e) => e.isNotEmpty)
         .join(', ');
-    final rating = _parseRating(data['rating']);
+  // Ratings removed
     return GestureDetector(
       onTap: onOpen,
       child: Container(
@@ -321,15 +317,7 @@ class _SavedCard extends StatelessWidget {
                       style:
                           const TextStyle(fontSize: 11, color: Colors.black54)),
                   const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.star, size: 14, color: Colors.amber),
-                      const SizedBox(width: 4),
-                      Text(rating.toStringAsFixed(1),
-                          style: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w600)),
-                    ],
-                  ),
+                  // Ratings removed
                 ],
               ),
             )
@@ -347,11 +335,7 @@ class _SavedListTile extends StatelessWidget {
   const _SavedListTile(
       {required this.data, required this.onOpen, required this.onToggleSave});
 
-  double _parseRating(dynamic r) {
-    if (r == null) return 0;
-    if (r is num) return r.toDouble();
-    return double.tryParse(r.toString()) ?? 0;
-  }
+  // Ratings removed
 
   @override
   Widget build(BuildContext context) {
@@ -366,7 +350,7 @@ class _SavedListTile extends StatelessWidget {
         .whereType<String>()
         .where((e) => e.isNotEmpty)
         .join(', ');
-    final rating = _parseRating(data['rating']);
+  // Ratings removed
     return InkWell(
       onTap: onOpen,
       child: Container(
@@ -454,16 +438,7 @@ class _SavedListTile extends StatelessWidget {
                         style: const TextStyle(
                             fontSize: 12, color: Colors.black54)),
                     const SizedBox(height: 10),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.star, size: 16, color: Colors.amber),
-                        const SizedBox(width: 4),
-                        Text(rating.toStringAsFixed(1),
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 12)),
-                      ],
-                    )
+                    // Ratings removed
                   ],
                 ),
               ),

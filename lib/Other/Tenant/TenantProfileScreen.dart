@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../config/AppConfig.dart';
 import '/Helper/API.dart';
 import 'TenantBookingsScreen.dart';
+import 'TenantSupportScreen.dart';
 
 class TenantProfileTab extends StatefulWidget {
   final User? user;
@@ -983,7 +984,14 @@ class _BookingsTab extends StatelessWidget {
             leading:
                 const Icon(Icons.support_agent_outlined, color: Colors.black87),
             title: 'Contact Support',
-            onTap: () {},
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TenantSupportScreen(),
+                ),
+              );
+            },
           ),
           SizedBox(height: 8),
           // Quick actions

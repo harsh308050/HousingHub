@@ -601,13 +601,6 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       textStyle: const TextStyle(fontWeight: FontWeight.w600),
     );
-    final ButtonStyle solidBlue = ElevatedButton.styleFrom(
-      backgroundColor: Colors.blue,
-      foregroundColor: Colors.white,
-      minimumSize: const Size.fromHeight(44),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      textStyle: const TextStyle(fontWeight: FontWeight.w600),
-    );
     final ButtonStyle solidGreen = ElevatedButton.styleFrom(
       backgroundColor: Colors.green,
       foregroundColor: Colors.white,
@@ -636,7 +629,10 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
         child: OutlinedButton.icon(
           onPressed: () => _showBookingDetails(bookingData),
           style: primaryOutlined,
-          icon: const Icon(Icons.info_outline),
+          icon: const Icon(
+            Icons.info_outline,
+            color: AppConfig.primaryColor,
+          ),
           label: const Text('View Details'),
         ),
       ),
@@ -671,16 +667,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
 
       case BookingStatus.accepted:
         buttons.add(const SizedBox(width: 8));
-        buttons.add(
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _openChat(bookingData),
-              style: solidBlue,
-              icon: const Icon(Icons.chat_bubble_outline),
-              label: const Text('Contact Tenant'),
-            ),
-          ),
-        );
+
         // Allow marking as completed for accepted bookings
         buttons.add(const SizedBox(width: 8));
         buttons.add(
@@ -688,7 +675,10 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
             child: ElevatedButton.icon(
               onPressed: () => _markCompleted(bookingData),
               style: solidPrimary,
-              icon: const Icon(Icons.task_alt),
+              icon: const Icon(
+                Icons.task_alt,
+                color: Colors.white,
+              ),
               label: const Text('Mark Complete'),
             ),
           ),
@@ -883,8 +873,10 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
 
   void _openChat(Map<String, dynamic> bookingData) {
     final tenantEmail = bookingData['tenantEmail'] as String?;
-    final tenantFirst = (bookingData['tenantData']?['firstName'] ?? '').toString();
-    final tenantLast = (bookingData['tenantData']?['lastName'] ?? '').toString();
+    final tenantFirst =
+        (bookingData['tenantData']?['firstName'] ?? '').toString();
+    final tenantLast =
+        (bookingData['tenantData']?['lastName'] ?? '').toString();
     final tenantName = ('$tenantFirst $tenantLast').trim();
 
     final ownerEmail = FirebaseAuth.instance.currentUser?.email;

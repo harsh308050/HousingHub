@@ -483,8 +483,8 @@ class _HomeTabState extends State<HomeTab> {
 
               SizedBox(height: 20),
 
-              // Views Stats Card (Dummy data)
-              _buildViewsCard(),
+              // Views Stats Card (Live unique views)
+              _buildViewsCard(context),
 
               SizedBox(height: 24),
 
@@ -530,6 +530,15 @@ class _HomeTabState extends State<HomeTab> {
                 icon: Icons.chat_bubble_outline,
                 label: 'Chats',
                 onTap: widget.onChatTapped,
+              ),
+
+              SizedBox(height: 12),
+
+              // Bookings Button
+              _buildActionButton(
+                icon: Icons.book_outlined,
+                label: 'Bookings',
+                onTap: widget.onBookingsTapped,
               ),
             ],
           ),
@@ -583,42 +592,49 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
-  Widget _buildViewsCard() {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, 2),
+  Widget _buildViewsCard(BuildContext context) {
+    final ownerEmail = FirebaseAuth.instance.currentUser?.email ?? '';
+    return StreamBuilder<int>(
+      stream: Api.streamOwnerUniqueViewsCount(ownerEmail),
+      builder: (context, snapshot) {
+        final count = snapshot.data ?? 0;
+        return Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.visibility_outlined, color: Colors.blue, size: 30),
-          SizedBox(width: 16),
-          Text(
-            '245',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
+          child: Row(
+            children: [
+              Icon(Icons.visibility_outlined, color: Colors.blue, size: 30),
+              SizedBox(width: 16),
+              Text(
+                count.toString(),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Views',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
           ),
-          SizedBox(width: 8),
-          Text(
-            'Views',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[600],
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

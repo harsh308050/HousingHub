@@ -103,7 +103,8 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
       final propertyId = widget.propertyData?['id'] ?? widget.propertyId;
       if (user != null && propertyId != null) {
         // Create a map with all the property data needed for display
-        final propertyData = widget.propertyData ?? <String, dynamic>{};
+        final propertyData = Map<String, dynamic>.from(
+            widget.propertyData ?? <String, dynamic>{});
 
         // Ensure we have the minimum required data
         if (!propertyData.containsKey('id')) {
@@ -123,12 +124,27 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
           propertyData['images'] = [widget.imagePath];
         }
 
+        // Ensure ownerEmail is present for aggregation
+        final ownerEmail = widget.propertyData?['ownerEmail']?.toString();
+        if (ownerEmail != null && ownerEmail.isNotEmpty) {
+          propertyData['ownerEmail'] = ownerEmail;
+        }
+
         // Record this view in Firestore
         await Api.addRecentlyViewedProperty(
           tenantEmail: user,
           propertyId: propertyId,
           propertyData: propertyData,
         );
+
+        // Track unique view for owner aggregation
+        if (ownerEmail != null && ownerEmail.isNotEmpty) {
+          await Api.trackUniqueOwnerView(
+            ownerEmail: ownerEmail,
+            tenantEmail: user,
+            propertyId: propertyId,
+          );
+        }
       }
     } catch (e) {
       // silent fail for tracking
@@ -760,13 +776,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                   ),
                   Row(
                     children: [
-                      Icon(Icons.star, color: Colors.amber, size: 18),
-                      Text(
-                        '0.0',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      // Ratings removed per request
                     ],
                   ),
                 ],

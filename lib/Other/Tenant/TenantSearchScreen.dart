@@ -729,7 +729,7 @@ class _PropertyResultCardState extends State<_PropertyResultCard> {
         : 'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg';
     final priceNum = _parsePrice(data['price']);
     final priceStr = '₹${priceNum.toStringAsFixed(0)}';
-    final rating = data['rating'];
+  // Ratings removed
     final isNew = data['createdAt'] is Timestamp
         ? DateTime.now()
                 .difference((data['createdAt'] as Timestamp).toDate())
@@ -866,22 +866,7 @@ class _PropertyResultCardState extends State<_PropertyResultCard> {
                           ],
                         ),
                       ),
-                      if (rating != null)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.star,
-                                size: 16, color: Colors.amber),
-                            const SizedBox(width: 4),
-                            Text(rating.toString(),
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600)),
-                            const SizedBox(width: 2),
-                            const Text('(128)',
-                                style: TextStyle(
-                                    fontSize: 11, color: Colors.black54)),
-                          ],
-                        ),
+                      // Ratings removed
                     ],
                   ),
                   const SizedBox(height: 6),

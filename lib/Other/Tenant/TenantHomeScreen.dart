@@ -58,6 +58,7 @@ class _TenantHomeScreenState extends State<TenantHomeScreen>
         currentCity: _currentCity,
         selectedState: _selectedState,
         onCityChanged: _updateCity,
+        onSearchTapped: () => setState(() => _selectedIndex = 1),
       ),
       TenantSearchTab(),
       TenantBookmarksTab(),
@@ -192,6 +193,7 @@ class _TenantHomeScreenState extends State<TenantHomeScreen>
         currentCity: _currentCity,
         selectedState: _selectedState,
         onCityChanged: _updateCity,
+        onSearchTapped: () => setState(() => _selectedIndex = 1),
       ),
       TenantSearchTab(),
       TenantBookmarksTab(),
@@ -307,6 +309,7 @@ class TenantHomeTab extends StatefulWidget {
   final String currentCity;
   final String? selectedState;
   final Function(String, String?) onCityChanged;
+  final VoidCallback onSearchTapped;
 
   const TenantHomeTab({
     Key? key,
@@ -315,6 +318,7 @@ class TenantHomeTab extends StatefulWidget {
     this.currentCity = 'Loading...',
     this.selectedState,
     required this.onCityChanged,
+    required this.onSearchTapped,
   }) : super(key: key);
 
   @override
@@ -589,7 +593,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                           children: [
                             IconButton(
                               icon: Icon(Icons.notifications_none_outlined,
-                                  size: 28),
+                                  size: 28, color: AppConfig.primaryColor),
                               onPressed: () {
                                 Navigator.pushNamed(
                                     context, 'NotificationScreen');
@@ -773,6 +777,9 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: TextField(
+                  onTap: () {
+                    widget.onSearchTapped();
+                  },
                   decoration: InputDecoration(
                     hintText: 'Search rooms, areas, or landmarks',
                     prefixIcon: Icon(Icons.search),
@@ -886,7 +893,11 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                     children: [
                       if (!_loadingProperties)
                         IconButton(
-                          icon: Icon(Icons.refresh, size: 20),
+                          icon: Icon(
+                            Icons.refresh,
+                            size: 20,
+                            color: AppConfig.primaryColor,
+                          ),
                           onPressed: () {
                             _fetchPropertiesNearby();
                           },
