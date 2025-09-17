@@ -69,7 +69,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
 
     // Load property data
     _loadPropertyData();
-  _checkAvailability();
+    _checkAvailability();
     _checkIfSaved();
     _trackPropertyView();
 
@@ -1342,8 +1342,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
     if (_isUnavailable) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content:
-                Text('This property is not available for booking.')),
+            content: Text('This property is not available for booking.')),
       );
       return;
     }

@@ -197,8 +197,7 @@ class _BookingScreenState extends State<BookingScreen>
     if (_isUnavailable) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text(
-                'This property is no longer available for booking.')),
+            content: Text('This property is no longer available for booking.')),
       );
       return;
     }
@@ -259,8 +258,7 @@ class _BookingScreenState extends State<BookingScreen>
     if (_isUnavailable) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text(
-                'This property is no longer available for booking.')),
+            content: Text('This property is no longer available for booking.')),
       );
       return;
     }
@@ -281,8 +279,10 @@ class _BookingScreenState extends State<BookingScreen>
         try {
           final ownerEmail = widget.propertyData['ownerEmail']?.toString();
           final propertyId = widget.propertyData['id']?.toString();
-          if (ownerEmail != null && ownerEmail.isNotEmpty &&
-              propertyId != null && propertyId.isNotEmpty) {
+          if (ownerEmail != null &&
+              ownerEmail.isNotEmpty &&
+              propertyId != null &&
+              propertyId.isNotEmpty) {
             final data = await Api.getPropertyById(ownerEmail, propertyId,
                 checkUnavailable: true);
             if (data == null || data['isAvailable'] != true) {
@@ -331,18 +331,52 @@ class _BookingScreenState extends State<BookingScreen>
           }
         }
 
-        // Extract owner fields
+        // Extract owner email and resolve owner details from Owners collection
         final String ownerEmail = widget.propertyData['ownerEmail'] ?? '';
-        final String ownerNameField = (widget.propertyData['ownerName'] ??
-                widget.propertyData['ownerFullName'] ??
-                '')
-            .toString()
-            .trim();
-        final String ownerMobileField = (widget.propertyData['ownerPhone'] ??
-                    widget.propertyData['ownerMobileNumber'] ??
-                    widget.propertyData['ownerContact'])
-                ?.toString() ??
-            '';
+        String resolvedOwnerName = '';
+        String resolvedOwnerMobile = '';
+
+        try {
+          if (ownerEmail.isNotEmpty) {
+            final ownerDoc = await Api.getOwnerDetailsByEmail(ownerEmail);
+            if (ownerDoc != null) {
+              resolvedOwnerName = (ownerDoc['fullName'] ??
+                      ownerDoc['displayName'] ??
+                      ownerDoc['name'] ??
+                      '')
+                  .toString()
+                  .trim();
+              resolvedOwnerMobile =
+                  (ownerDoc['mobileNumber'] ?? ownerDoc['phone'] ?? '')
+                      .toString()
+                      .trim();
+            }
+          }
+        } catch (e) {
+          // If lookup fails, continue with fallbacks below
+          debugPrint('Owner details lookup failed: $e');
+        }
+
+        // Fallbacks: try property payload then email prefix
+        if (resolvedOwnerName.isEmpty) {
+          final propOwnerName = (widget.propertyData['fullName'] ??
+                  widget.propertyData['ownerName'] ??
+                  '')
+              .toString()
+              .trim();
+          if (propOwnerName.isNotEmpty) {
+            resolvedOwnerName = propOwnerName;
+          } else if (ownerEmail.isNotEmpty) {
+            resolvedOwnerName = ownerEmail.split('@').first;
+          }
+        }
+        if (resolvedOwnerMobile.isEmpty) {
+          resolvedOwnerMobile = (widget.propertyData['ownerPhone'] ??
+                      widget.propertyData['ownerMobileNumber'] ??
+                      widget.propertyData['ownerContact'])
+                  ?.toString() ??
+              '';
+        }
 
         // Create booking
         final bookingId = await Api.createBooking(
@@ -355,9 +389,9 @@ class _BookingScreenState extends State<BookingScreen>
           checkInDate: _selectedCheckInDate!,
           bookingPeriodMonths: _selectedPeriodMonths ?? 1,
           amount: propertyData.totalAmount,
-          ownerName: ownerNameField.isNotEmpty ? ownerNameField : null,
+          ownerName: resolvedOwnerName.isNotEmpty ? resolvedOwnerName : null,
           ownerMobileNumber:
-              ownerMobileField.isNotEmpty ? ownerMobileField : null,
+              resolvedOwnerMobile.isNotEmpty ? resolvedOwnerMobile : null,
           notes: _notesController.text.isEmpty ? null : _notesController.text,
           paymentId: _paymentId,
           paymentSignature: _paymentSignature,
@@ -373,21 +407,15 @@ class _BookingScreenState extends State<BookingScreen>
             final depositAmount = _parsePrice(
                 widget.propertyData['securityDeposit'] ??
                     widget.propertyData['deposit']);
-            final ownerName = ownerNameField;
-            final nameParts = ownerName.split(' ');
-            final ownerFirst = nameParts.isNotEmpty ? nameParts.first : '';
-            final ownerLast =
-                nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+            final ownerName = resolvedOwnerName;
 
             receiptUrl = await PdfReceiptGenerator.generateAndUploadReceipt(
               bookingId: bookingId,
               tenantData: tenantData.toMap(),
               propertyData: propertyData.toMap(),
               ownerData: {
-                'firstName': ownerFirst,
-                'lastName': ownerLast,
                 'ownerName': ownerName,
-                'mobileNumber': ownerMobileField,
+                'mobileNumber': resolvedOwnerMobile,
                 'email': ownerEmail,
               },
               paymentData: {
@@ -422,9 +450,10 @@ class _BookingScreenState extends State<BookingScreen>
               tenantEmail: user.email!,
               ownerEmail: ownerEmail,
               receiptUrl: receiptUrl,
-              ownerName: ownerNameField.isNotEmpty ? ownerNameField : null,
+              ownerName:
+                  resolvedOwnerName.isNotEmpty ? resolvedOwnerName : null,
               ownerMobileNumber:
-                  ownerMobileField.isNotEmpty ? ownerMobileField : null,
+                  resolvedOwnerMobile.isNotEmpty ? resolvedOwnerMobile : null,
             );
           } catch (e) {
             // Don't fail the booking if receipt generation fails
@@ -1925,8 +1954,7 @@ class _BookingScreenState extends State<BookingScreen>
     if (_isUnavailable) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text(
-                'This property is no longer available for booking.')),
+            content: Text('This property is no longer available for booking.')),
       );
       return;
     }
@@ -1982,8 +2010,10 @@ class _BookingScreenState extends State<BookingScreen>
     try {
       final ownerEmail = widget.propertyData['ownerEmail']?.toString();
       final propertyId = widget.propertyData['id']?.toString();
-      if (ownerEmail == null || ownerEmail.isEmpty ||
-          propertyId == null || propertyId.isEmpty) return;
+      if (ownerEmail == null ||
+          ownerEmail.isEmpty ||
+          propertyId == null ||
+          propertyId.isEmpty) return;
 
       // Respect inline data if explicitly unavailable
       if (widget.propertyData['isAvailable'] == false ||

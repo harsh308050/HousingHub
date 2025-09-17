@@ -9,6 +9,7 @@ import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'Other/Tenant/TenantHomeScreen.dart';
 import 'Other/Notification/NotificationScreen.dart';
+import 'Other/Owner/OwnerApprovalScreen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,6 +49,7 @@ class _MyAppState extends State<MyApp> {
         'SplashScreen': (context) => const Splashscreen(),
         'LoginScreen': (context) => LoginScreen(),
         'OwnerHomeScreen': (context) => OwnerHomeScreen(),
+        'OwnerApprovalScreen': (context) => const OwnerApprovalScreen(),
         'TenantHomeScreen': (context) => TenantHomeScreen(),
         'NotificationScreen': (context) => NotificationScreen()
       },

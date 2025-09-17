@@ -231,7 +231,7 @@ class _SavedCard extends StatelessWidget {
         .whereType<String>()
         .where((e) => e.isNotEmpty)
         .join(', ');
-  // Ratings removed
+    // Ratings removed
     return GestureDetector(
       onTap: onOpen,
       child: Container(
@@ -350,7 +350,7 @@ class _SavedListTile extends StatelessWidget {
         .whereType<String>()
         .where((e) => e.isNotEmpty)
         .join(', ');
-  // Ratings removed
+    // Ratings removed
     return InkWell(
       onTap: onOpen,
       child: Container(

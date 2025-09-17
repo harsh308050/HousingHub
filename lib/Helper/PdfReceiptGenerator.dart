@@ -220,7 +220,8 @@ class PdfReceiptGenerator {
           pw.SizedBox(height: 30),
 
           // Booking Details
-          _buildBookingDetails(checkInDate, checkoutDate, bookingPeriodMonths, paymentDate, font, fontBold),
+          _buildBookingDetails(checkInDate, checkoutDate, bookingPeriodMonths,
+              paymentDate, font, fontBold),
           pw.SizedBox(height: 30),
 
           // Payment Table
@@ -369,28 +370,11 @@ class PdfReceiptGenerator {
     pw.Font font,
     pw.Font fontBold,
   ) {
-    final String ownerFirst = (ownerData['firstName']?.toString() ?? '').trim();
-    final String ownerLast = (ownerData['lastName']?.toString() ?? '').trim();
-    final String ownerFullFromData =
-        (ownerData['ownerName']?.toString() ?? '').trim();
-    final String ownerFullFromProperty =
-        (propertyData['ownerName']?.toString() ?? '').trim();
+    final String ownerName = (ownerData['fullName'].toString());
     final String ownerEmail = (ownerData['email']?.toString() ??
             propertyData['ownerEmail']?.toString() ??
             '')
         .trim();
-    final String computedOwnerName = (() {
-      final combined =
-          [ownerFirst, ownerLast].where((p) => p.isNotEmpty).join(' ').trim();
-      if (combined.isNotEmpty) return combined;
-      if (ownerFullFromData.isNotEmpty) return ownerFullFromData;
-      if (ownerFullFromProperty.isNotEmpty) return ownerFullFromProperty;
-      if (ownerEmail.isNotEmpty) {
-        final local = ownerEmail.split('@').first;
-        if (local.isNotEmpty) return local;
-      }
-      return 'Not provided';
-    })();
     final String ownerPhone =
         (ownerData['mobileNumber']?.toString() ?? '').trim().isNotEmpty
             ? ownerData['mobileNumber'].toString()
@@ -431,7 +415,7 @@ class PdfReceiptGenerator {
                 font: fontBold, fontSize: 12, color: PdfColors.blue800),
           ),
           pw.SizedBox(height: 5),
-          pw.Text('Name: $computedOwnerName',
+          pw.Text('Name: $ownerName',
               style: pw.TextStyle(font: font, fontSize: 10)),
           pw.Text(
             'Email: ${ownerEmail.isNotEmpty ? ownerEmail : 'Not provided'}',

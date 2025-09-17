@@ -593,7 +593,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
 
   Widget _buildActionButtons(
       Map<String, dynamic> bookingData, BookingStatus status) {
-    List<Widget> buttons = [];
+    // Common styles
     final ButtonStyle primaryOutlined = OutlinedButton.styleFrom(
       foregroundColor: AppConfig.primaryColor,
       side: BorderSide(color: AppConfig.primaryColor, width: 1.2),
@@ -623,87 +623,137 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
       textStyle: const TextStyle(fontWeight: FontWeight.w600),
     );
 
-    // View Details button - always shown
-    buttons.add(
-      Expanded(
-        child: OutlinedButton.icon(
+    // Label helpers to prevent wrapping on small screens
+    Text _label(String text) => Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          softWrap: false,
+        );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxW = constraints.maxWidth;
+        final isNarrow = maxW < 360; // very small phones
+        final isMedium = maxW >= 360 && maxW < 480; // typical phones
+
+        // Builders for buttons
+        Widget viewDetailsBtn = OutlinedButton.icon(
           onPressed: () => _showBookingDetails(bookingData),
           style: primaryOutlined,
           icon: const Icon(
             Icons.info_outline,
             color: AppConfig.primaryColor,
           ),
-          label: const Text('View Details'),
-        ),
-      ),
-    );
-
-    // Status-specific actions
-    switch (status) {
-      case BookingStatus.pending:
-        buttons.add(const SizedBox(width: 8));
-        buttons.add(
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _rejectBooking(bookingData),
-              style: solidRed,
-              icon: const Icon(Icons.close_rounded),
-              label: const Text('Reject'),
-            ),
+          label: _label('View Details'),
+        );
+        Widget rejectBtn = ElevatedButton.icon(
+          onPressed: () => _rejectBooking(bookingData),
+          style: solidRed,
+          icon: const Icon(Icons.close_rounded, color: Colors.white),
+          label: _label(
+            'Reject',
           ),
         );
-        buttons.add(const SizedBox(width: 8));
-        buttons.add(
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _approveBooking(bookingData),
-              style: solidGreen,
-              icon: const Icon(Icons.check_circle_outline),
-              label: const Text('Approve'),
-            ),
-          ),
+        Widget approveBtn = ElevatedButton.icon(
+          onPressed: () => _approveBooking(bookingData),
+          style: solidGreen,
+          icon: const Icon(Icons.check_circle_outline, color: Colors.white),
+          label: _label('Approve'),
         );
-        break;
-
-      case BookingStatus.accepted:
-        buttons.add(const SizedBox(width: 8));
-
-        // Allow marking as completed for accepted bookings
-        buttons.add(const SizedBox(width: 8));
-        buttons.add(
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _markCompleted(bookingData),
-              style: solidPrimary,
-              icon: const Icon(
-                Icons.task_alt,
-                color: Colors.white,
-              ),
-              label: const Text('Mark Complete'),
-            ),
-          ),
+        Widget markCompleteBtn = ElevatedButton.icon(
+          onPressed: () => _markCompleted(bookingData),
+          style: solidPrimary,
+          icon: const Icon(Icons.task_alt, color: Colors.white),
+          label: _label('Mark Complete'),
         );
-        break;
+        Widget contactBtn = OutlinedButton.icon(
+          onPressed: () => _openChat(bookingData),
+          style: primaryOutlined,
+          icon: const Icon(Icons.chat_bubble_outline,
+              color: AppConfig.primaryColor),
+          label: _label('Contact'),
+        );
 
-      default:
-        // For completed and rejected - only view details and contact
-        if (status != BookingStatus.rejected) {
-          buttons.add(const SizedBox(width: 8));
-          buttons.add(
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _openChat(bookingData),
-                style: primaryOutlined,
-                icon: const Icon(Icons.chat_bubble_outline),
-                label: const Text('Contact'),
-              ),
-            ),
+        // Helper to build two buttons side-by-side with equal width
+        Widget twoCol(Widget a, Widget b) {
+          return Row(
+            children: [
+              Expanded(child: a),
+              const SizedBox(width: 8),
+              Expanded(child: b),
+            ],
           );
         }
-        break;
-    }
 
-    return Row(children: buttons);
+        // Pending: 3 actions (details, reject, approve)
+        if (status == BookingStatus.pending) {
+          if (isNarrow) {
+            // Stack into 2 rows for very small screens
+            return Column(
+              children: [
+                viewDetailsBtn,
+                const SizedBox(height: 8),
+                twoCol(rejectBtn, approveBtn),
+              ],
+            );
+          } else if (isMedium) {
+            // Two rows: details + approve on first, reject on second full width
+            return Column(
+              children: [
+                twoCol(viewDetailsBtn, approveBtn),
+                const SizedBox(height: 8),
+                rejectBtn,
+              ],
+            );
+          } else {
+            // Wide: single row 3 buttons
+            return Row(
+              children: [
+                Expanded(child: viewDetailsBtn),
+                const SizedBox(width: 8),
+                Expanded(child: rejectBtn),
+                const SizedBox(width: 8),
+                Expanded(child: approveBtn),
+              ],
+            );
+          }
+        }
+
+        // Accepted: View details + Mark complete
+        if (status == BookingStatus.accepted) {
+          if (isNarrow) {
+            return Column(
+              children: [
+                viewDetailsBtn,
+                const SizedBox(height: 8),
+                markCompleteBtn,
+              ],
+            );
+          } else {
+            return twoCol(viewDetailsBtn, markCompleteBtn);
+          }
+        }
+
+        // Completed/Rejected: View details (+ Contact for completed)
+        if (status == BookingStatus.completed) {
+          if (isNarrow) {
+            return Column(
+              children: [
+                viewDetailsBtn,
+                const SizedBox(height: 8),
+                contactBtn,
+              ],
+            );
+          } else {
+            return twoCol(viewDetailsBtn, contactBtn);
+          }
+        }
+
+        // Rejected: only View details
+        return viewDetailsBtn;
+      },
+    );
   }
 
   // Receipt handling now lives in BookingDetailsScreen

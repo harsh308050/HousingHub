@@ -6,6 +6,7 @@ import 'package:housinghub/Other/BookingDetailsScreen.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/Helper/BookingModels.dart';
+import 'package:url_launcher/url_launcher.dart';
 // shimmer removed along with old loading UI
 
 class TenantBookingsScreen extends StatefulWidget {
@@ -490,14 +491,60 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
     }
   }
 
-  void _contactOwner(Map<String, dynamic> bookingData) {
-    final ownerEmail = bookingData['ownerEmail'];
-    if (ownerEmail != null) {
-      // Navigate to chat screen (assuming it exists)
+  Future<void> _contactOwner(Map<String, dynamic> bookingData) async {
+    try {
+      final ownerEmail = (bookingData['ownerEmail'] ?? '').toString();
+      if (ownerEmail.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Owner contact not available')),
+        );
+        return;
+      }
+
+      // Try to resolve owner's mobile number
+      String? mobile = await Api.getUserMobileNumber(ownerEmail);
+
+      // Fallbacks: try propertyData fields if profile not found
+      if (mobile == null || mobile.isEmpty) {
+        final propertyData =
+            bookingData['propertyData'] as Map<String, dynamic>? ?? {};
+        mobile = propertyData['ownerPhone']?.toString() ??
+            propertyData['ownerMobileNumber']?.toString() ??
+            propertyData['contactNumber']?.toString();
+      }
+
+      if (mobile == null || mobile.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Owner phone number not found')),
+        );
+        return;
+      }
+
+      // Clean and format number for tel: scheme
+      final cleanNumber = mobile.replaceAll(RegExp(r'[^\d+]'), '');
+      if (cleanNumber.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invalid owner phone number')),
+        );
+        return;
+      }
+
+      final uri = Uri(scheme: 'tel', path: cleanNumber);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        // Secondary attempt
+        final alt = Uri.parse('tel:$cleanNumber');
+        final ok = await canLaunchUrl(alt) && await launchUrl(alt);
+        if (!ok) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Unable to open dialer for $cleanNumber')),
+          );
+        }
+      }
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Opening chat with owner: $ownerEmail'),
-        ),
+        SnackBar(content: Text('Error making call: $e')),
       );
     }
   }

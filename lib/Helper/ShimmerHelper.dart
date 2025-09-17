@@ -159,7 +159,7 @@ class ShimmerHelper {
       ),
     );
   }
-  
+
   // Owner Property Tab Shimmer - matches the owner property card layout
   static Widget ownerPropertyCardShimmer() {
     return baseShimmer(
@@ -192,7 +192,8 @@ class ShimmerHelper {
                     width: double.infinity,
                     decoration: BoxDecoration(
                       color: Colors.grey[300],
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(12)),
                     ),
                   ),
                   // Property Details
@@ -605,68 +606,85 @@ class ShimmerHelper {
     return baseShimmer(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Column(
-          children: List.generate(8, (index) {
-            return Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    // Avatar with online status indicator placeholder
-                    Stack(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final nameWidth = (constraints.maxWidth * 0.45).clamp(80.0, 180.0);
+            final msgWidth = (constraints.maxWidth * 0.6).clamp(120.0, 240.0);
+            return Column(
+              children: List.generate(8, (index) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
                       children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        // Online status indicator placeholder
-                        Positioned(
-                          right: 0,
-                          bottom: 0,
-                          child: Container(
-                            width: 14,
-                            height: 14,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 2,
+                        // Avatar with online status indicator placeholder
+                        Stack(
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.grey,
                               ),
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 16),
-
-                    // Message content
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Name and time row
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              // Name placeholder
-                              Container(
-                                height: 18,
-                                width: 120 + (index % 3) * 20, // Varying widths
+                            // Online status indicator placeholder
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                width: 14,
+                                height: 14,
                                 decoration: BoxDecoration(
                                   color: Colors.grey[300],
-                                  borderRadius: BorderRadius.circular(4),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2,
+                                  ),
                                 ),
                               ),
-                              // Time placeholder
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 16),
+
+                        // Message content
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Name and time row
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  // Name placeholder
+                                  Container(
+                                    height: 18,
+                                    width: nameWidth,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[300],
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ),
+                                  // Time placeholder
+                                  Container(
+                                    height: 14,
+                                    width: 50,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[300],
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              // Last message placeholder
                               Container(
-                                height: 14,
-                                width: 50,
+                                height: 16,
+                                width: msgWidth,
                                 decoration: BoxDecoration(
                                   color: Colors.grey[300],
                                   borderRadius: BorderRadius.circular(4),
@@ -674,36 +692,89 @@ class ShimmerHelper {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          // Last message placeholder
+                        ),
+
+                        // Unread indicator placeholder (sometimes visible)
+                        if (index % 3 == 0)
                           Container(
-                            height: 16,
-                            width: 180 + (index % 4) * 30, // Varying widths
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(4),
+                            width: 8,
+                            height: 8,
+                            margin: const EdgeInsets.only(left: 8),
+                            decoration: const BoxDecoration(
+                              color: Colors.grey,
+                              shape: BoxShape.circle,
                             ),
                           ),
-                        ],
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  // Single conversation row shimmer (for list items while fetching extra profile info)
+  static Widget singleMessageItemShimmer() {
+    return baseShimmer(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          height: 18,
+                          width: 140,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        Container(
+                          height: 14,
+                          width: 50,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 16,
+                      width: 200,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(4),
                       ),
                     ),
-
-                    // Unread indicator placeholder (sometimes visible)
-                    if (index % 3 == 0)
-                      Container(
-                        width: 8,
-                        height: 8,
-                        margin: const EdgeInsets.only(left: 8),
-                        decoration: const BoxDecoration(
-                          color: Colors.grey,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
                   ],
                 ),
               ),
-            );
-          }),
+            ],
+          ),
         ),
       ),
     );

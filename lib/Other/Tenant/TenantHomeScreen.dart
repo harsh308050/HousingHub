@@ -66,14 +66,16 @@ class _TenantHomeScreenState extends State<TenantHomeScreen>
 
       // Save cache
       _cityCoordsCache.putIfAbsent(stateKey, () => {});
-      _cityCoordsCache[stateKey]![cityKey] = _Coord(loc.latitude, loc.longitude);
+      _cityCoordsCache[stateKey]![cityKey] =
+          _Coord(loc.latitude, loc.longitude);
       return _cityCoordsCache[stateKey]![cityKey];
     } catch (_) {
       return null;
     }
   }
 
-  Future<String> _resolveCityByDistance(Position pos, String detectedCity, String? stateName) async {
+  Future<String> _resolveCityByDistance(
+      Position pos, String detectedCity, String? stateName) async {
     try {
       // 0) If no state, we cannot get the state's city list; keep detected city
       if ((stateName ?? '').isEmpty) return detectedCity;
@@ -104,7 +106,8 @@ class _TenantHomeScreenState extends State<TenantHomeScreen>
       for (final city in cities) {
         final coord = await _geocodeCity(city, stateName);
         if (coord == null) continue;
-        final d = Geolocator.distanceBetween(pos.latitude, pos.longitude, coord.lat, coord.lng);
+        final d = Geolocator.distanceBetween(
+            pos.latitude, pos.longitude, coord.lat, coord.lng);
         if (d < bestDistance) {
           bestDistance = d;
           bestCity = city;
@@ -241,11 +244,12 @@ class _TenantHomeScreenState extends State<TenantHomeScreen>
       Map<String, String?> locationData =
           await Api.getCityFromLocation(position.latitude, position.longitude);
 
-  final detectedCity = locationData['city'] ?? 'Unknown City';
-  final detectedState = locationData['state'];
+      final detectedCity = locationData['city'] ?? 'Unknown City';
+      final detectedState = locationData['state'];
 
-  // Resolve by nearest available dropdown city based on GPS radius
-  final resolvedCity = await _resolveCityByDistance(position, detectedCity, detectedState);
+      // Resolve by nearest available dropdown city based on GPS radius
+      final resolvedCity =
+          await _resolveCityByDistance(position, detectedCity, detectedState);
 
       setState(() {
         _currentCity = resolvedCity;

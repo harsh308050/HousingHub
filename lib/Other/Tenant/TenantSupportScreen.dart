@@ -16,7 +16,8 @@ class TenantSupportScreen extends StatelessWidget {
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Help & Support', style: TextStyle(color: Colors.black87)),
+        title: const Text('Help & Support',
+            style: TextStyle(color: Colors.black87)),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -33,13 +34,17 @@ class TenantSupportScreen extends StatelessWidget {
                       color: const Color(0xFFE6F0FF),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.support_agent, color: Color(0xFF0066FF), size: 28),
+                    child: const Icon(Icons.support_agent,
+                        color: Color(0xFF0066FF), size: 28),
                   ),
                   const SizedBox(width: 16),
                   const Expanded(
                     child: Text(
                       'We\'re here to help',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
+                      style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87),
                     ),
                   ),
                 ],
@@ -48,7 +53,8 @@ class TenantSupportScreen extends StatelessWidget {
               const SizedBox(height: 16),
               const Text(
                 'Contact HousingHub support for questions about bookings, payments, or account issues.',
-                style: TextStyle(fontSize: 15, height: 1.5, color: Colors.black87),
+                style:
+                    TextStyle(fontSize: 15, height: 1.5, color: Colors.black87),
               ),
 
               const SizedBox(height: 20),
@@ -73,17 +79,30 @@ class TenantSupportScreen extends StatelessWidget {
               const SizedBox(height: 24),
               const Text(
                 'Quick tips',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87),
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87),
               ),
               const SizedBox(height: 8),
-              _TipTile(icon: Icons.search, text: 'Use filters to narrow down by budget, city, and amenities.'),
-              _TipTile(icon: Icons.message_outlined, text: 'Use in-app chat to talk to the owner securely.'),
-              _TipTile(icon: Icons.receipt_long_outlined, text: 'Download receipts from your booking details anytime.'),
+              _TipTile(
+                  icon: Icons.search,
+                  text:
+                      'Use filters to narrow down by budget, city, and amenities.'),
+              _TipTile(
+                  icon: Icons.message_outlined,
+                  text: 'Use in-app chat to talk to the owner securely.'),
+              _TipTile(
+                  icon: Icons.receipt_long_outlined,
+                  text: 'Download receipts from your booking details anytime.'),
 
               const SizedBox(height: 24),
               const Text(
                 'FAQs',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87),
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87),
               ),
               const SizedBox(height: 8),
               const _FaqItem(
@@ -188,7 +207,9 @@ class _ActionCard extends StatelessWidget {
               children: [
                 Text(title,
                     style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87)),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87)),
                 const SizedBox(height: 4),
                 Text(subtitle, style: TextStyle(color: Colors.grey[700])),
               ],
@@ -201,7 +222,8 @@ class _ActionCard extends StatelessWidget {
               backgroundColor: AppConfig.primaryColor,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
             child: Text(buttonLabel),
           ),
@@ -236,7 +258,8 @@ class _TipTile extends StatelessWidget {
         children: [
           Icon(icon, color: AppConfig.primaryColor),
           const SizedBox(width: 12),
-          Expanded(child: Text(text, style: const TextStyle(color: Colors.black87))),
+          Expanded(
+              child: Text(text, style: const TextStyle(color: Colors.black87))),
         ],
       ),
     );
@@ -269,11 +292,16 @@ class _FaqItem extends StatelessWidget {
           tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           title: Text(q,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87)),
+              style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87)),
           children: [
             Align(
               alignment: Alignment.centerLeft,
-              child: Text(a, style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.5)),
+              child: Text(a,
+                  style: const TextStyle(
+                      fontSize: 14, color: Colors.black87, height: 1.5)),
             ),
           ],
         ),

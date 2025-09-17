@@ -11,6 +11,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -32,6 +34,9 @@ class _LoginScreenState extends State<LoginScreen> {
   Map<String, String> _stateCodeMap =
       {}; // Map to store state names and their codes
   bool _isGoogleSignUp = false; // Track if user came from Google Sign-In
+  // Owner approval proof selection state
+  File? _selectedOwnerProofFile;
+  String _selectedOwnerProofType = 'Aadhaar';
 
   // For searchable dropdowns
   TextEditingController _stateSearchController = TextEditingController();
@@ -413,9 +418,9 @@ class _LoginScreenState extends State<LoginScreen> {
         // Success message
         if (currentUser != null && currentUser.emailVerified) {
           Models.showSuccessSnackBar(context,
-              'Profile completed successfully! Welcome to HousingHub.');
-          // Navigate directly to home for verified users
-          _navigateToHomeScreen();
+              'Profile completed! Please submit your ID for approval.');
+          // Owners must go to approval screen until approved
+          Navigator.pushReplacementNamed(context, 'OwnerApprovalScreen');
         } else {
           Models.showSuccessSnackBar(context,
               'Registration successful! Please check your email to verify your account.');
@@ -536,7 +541,15 @@ class _LoginScreenState extends State<LoginScreen> {
           if (userData != null) {
             // Login successful, navigate to home page or dashboard
             _clearInputFields();
-            _navigateToHomeScreen();
+            // Gate by approval status for owners
+            final email = _emailController.text.trim();
+            Api.getOwnerApprovalStatus(email).then((status) {
+              if (status == 'approved') {
+                Navigator.pushReplacementNamed(context, 'OwnerHomeScreen');
+              } else {
+                Navigator.pushReplacementNamed(context, 'OwnerApprovalScreen');
+              }
+            });
           }
         },
         onError: (e) {
@@ -669,6 +682,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
         log("Attempting to create owner with email: $email");
 
+        // Require ID proof selection
+        if (_selectedOwnerProofFile == null) {
+          Models.showWarningSnackBar(
+              context, 'Please upload a valid Proof of Identity');
+          setState(() {
+            isLoading = false;
+          });
+          return;
+        }
+
         // Check if user is already authenticated (e.g., from Google Sign-In)
         User? currentUser = Api.getCurrentUser();
 
@@ -733,6 +756,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
         log("Owner data stored in Firestore successfully");
 
+        // Immediately submit approval request with uploaded proof
+        try {
+          await Api.uploadOwnerIdProofAndRequestApproval(
+            email: email,
+            proofImageFile: _selectedOwnerProofFile!,
+            proofType: _selectedOwnerProofType,
+          );
+          log("Owner approval request submitted");
+        } catch (e) {
+          log("Failed to submit approval request: $e");
+          Models.showErrorSnackBar(
+              context, 'Failed to submit approval request: $e');
+        }
+
         // Send email verification only if not already verified (Google users are pre-verified)
         if (currentUser == null || !currentUser.emailVerified) {
           await Api.sendEmailVerification();
@@ -746,7 +783,7 @@ class _LoginScreenState extends State<LoginScreen> {
           _navigateToHomeScreen();
         } else {
           Models.showSuccessSnackBar(context,
-              'Registration successful! Please check your email to verify your account.');
+              'Registration successful! Verify your email, then submit ID for approval.');
           // Switch to login tab for unverified users
           setState(() {
             isLoginTab = true;
@@ -935,7 +972,20 @@ class _LoginScreenState extends State<LoginScreen> {
     if (isTenant) {
       Navigator.pushReplacementNamed(context, 'TenantHomeScreen');
     } else {
-      Navigator.pushReplacementNamed(context, 'OwnerHomeScreen');
+      // For owners, gate by approval status
+      final currentUser = FirebaseAuth.instance.currentUser;
+      final email = currentUser?.email ?? _emailController.text.trim();
+      if (email.isEmpty) {
+        Navigator.pushReplacementNamed(context, 'LoginScreen');
+        return;
+      }
+      Api.getOwnerApprovalStatus(email).then((status) {
+        if (status == 'approved') {
+          Navigator.pushReplacementNamed(context, 'OwnerHomeScreen');
+        } else {
+          Navigator.pushReplacementNamed(context, 'OwnerApprovalScreen');
+        }
+      });
     }
   }
 
@@ -1354,6 +1404,10 @@ class _LoginScreenState extends State<LoginScreen> {
   // Widget to build the owner signup form
   Widget _buildOwnerSignupForm() {
     final width = MediaQuery.of(context).size.width;
+    // final height = MediaQuery.of(context).size.height;
+    // Local state within widget tree via StatefulBuilder would be heavy; reuse controllers/state
+    // Add temporary fields to hold proof selection
+    // We'll manage via simple variables in the parent state class
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1739,6 +1793,22 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
 
+        // Proof of Identity section
+        const SizedBox(height: 8),
+        Text(
+          'Proof of Identity (required)',
+          style:
+              TextStyle(fontSize: width * 0.045, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        _OwnerIdProofPicker(
+          onChanged: (type, file) {
+            _selectedOwnerProofType = type;
+            _selectedOwnerProofFile = file;
+          },
+        ),
+
+        const SizedBox(height: 16),
         // Sign Up button
         _buildPrimaryButton(
           text: 'Sign Up',
@@ -1897,7 +1967,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
           if (tenantData != null) {
             log("Existing tenant data found for Google user");
-            Models.showSuccessSnackBar(context, 'Welcome back!');
+
             // Ensure we're in tenant mode for navigation
             setState(() {
               isTenant = true;
@@ -2003,7 +2073,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
           if (ownerData != null) {
             log("Existing owner data found for Google user");
-            Models.showSuccessSnackBar(context, 'Welcome back!');
             // Ensure we're in owner mode for navigation
             setState(() {
               isTenant = false;
@@ -2075,5 +2144,90 @@ class _LoginScreenState extends State<LoginScreen> {
       Models.showErrorSnackBar(
           context, 'Google Sign-In failed: ${e.toString()}');
     }
+  }
+}
+
+class _OwnerIdProofPicker extends StatefulWidget {
+  final void Function(String type, File? file) onChanged;
+  const _OwnerIdProofPicker({required this.onChanged});
+
+  @override
+  State<_OwnerIdProofPicker> createState() => _OwnerIdProofPickerState();
+}
+
+class _OwnerIdProofPickerState extends State<_OwnerIdProofPicker> {
+  String _type = 'Aadhaar';
+  File? _file;
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _pick() async {
+    final x =
+        await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (x != null) {
+      setState(() => _file = File(x.path));
+      widget.onChanged(_type, _file);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: DropdownButtonFormField<String>(
+              value: _type,
+              decoration: const InputDecoration(
+                  labelText: 'Document Type', border: InputBorder.none),
+              items: const [
+                DropdownMenuItem(value: 'Aadhaar', child: Text('Aadhaar Card')),
+                DropdownMenuItem(value: 'PAN', child: Text('PAN Card')),
+                DropdownMenuItem(
+                    value: 'Driving License', child: Text('Driving License')),
+                DropdownMenuItem(value: 'Passport', child: Text('Passport')),
+              ],
+              onChanged: (v) {
+                setState(() => _type = v ?? 'Aadhaar');
+                widget.onChanged(_type, _file);
+              },
+            )),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: _pick,
+          child: Container(
+            height: 160,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+              color: Colors.grey.shade100,
+              image: _file != null
+                  ? DecorationImage(image: FileImage(_file!), fit: BoxFit.cover)
+                  : null,
+            ),
+            child: _file == null
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.upload_file, size: 36, color: Colors.grey),
+                        SizedBox(height: 8),
+                        Text('Tap to upload ID proof'),
+                      ],
+                    ),
+                  )
+                : null,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text('Accepted: Aadhaar, PAN, DL, Passport',
+            style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+      ],
+    );
   }
 }

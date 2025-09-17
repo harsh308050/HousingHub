@@ -123,11 +123,8 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
                           // Show shimmer while loading profile data
                           if (profileSnapshot.connectionState ==
                               ConnectionState.waiting) {
-                            return Container(
-                              margin: EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
-                              child: ShimmerHelper.messageListShimmer(),
-                            );
+                            // Show a single-row shimmer to match one list item
+                            return ShimmerHelper.singleMessageItemShimmer();
                           }
 
                           String displayName = _formatDisplayName(other);

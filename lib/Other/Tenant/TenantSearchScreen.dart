@@ -729,7 +729,7 @@ class _PropertyResultCardState extends State<_PropertyResultCard> {
         : 'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg';
     final priceNum = _parsePrice(data['price']);
     final priceStr = '₹${priceNum.toStringAsFixed(0)}';
-  // Ratings removed
+    // Ratings removed
     final isNew = data['createdAt'] is Timestamp
         ? DateTime.now()
                 .difference((data['createdAt'] as Timestamp).toDate())

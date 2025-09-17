@@ -39,13 +39,24 @@ class _SplashscreenState extends State<Splashscreen> {
             // Set user presence as online for auto-login
             Api.updateUserPresence(email);
 
-            String userType = await Api.getUserType(email);
+            // Prefer tenant experience if both profiles exist
+            final tenantDoc = await Api.getUserDetailsByEmail(email);
+            final ownerDoc = await Api.getOwnerDetailsByEmail(email);
 
-            if (userType == 'owner') {
-              Navigator.pushReplacementNamed(context, 'OwnerHomeScreen');
-              return;
-            } else if (userType == 'tenant') {
+            if (tenantDoc != null) {
+              // Always send tenants to TenantHome first; no owner gating here
               Navigator.pushReplacementNamed(context, 'TenantHomeScreen');
+              return;
+            }
+
+            if (ownerDoc != null) {
+              // Owner flow: gate by approval
+              final status = await Api.getOwnerApprovalStatus(email);
+              if (status == 'approved') {
+                Navigator.pushReplacementNamed(context, 'OwnerHomeScreen');
+              } else {
+                Navigator.pushReplacementNamed(context, 'OwnerApprovalScreen');
+              }
               return;
             }
           }
@@ -89,7 +100,7 @@ class _SplashscreenState extends State<Splashscreen> {
                     AppConfig.logoPath,
                     fit: BoxFit.cover,
                   )),
-              SizedBox(height: 20),
+              SizedBox(height: 10),
               AnimatedTextKit(animatedTexts: [
                 ColorizeAnimatedText(
                   AppConfig.appName,

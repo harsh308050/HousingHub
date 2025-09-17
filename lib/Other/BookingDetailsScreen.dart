@@ -632,15 +632,14 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
     };
     final paymentInfo = Map<String, dynamic>.from(booking['paymentInfo'] ?? {});
     final checkInDate = _asDateTime(booking['checkInDate']) ?? DateTime.now();
-  final DateTime? checkoutDate = _asDateTime(booking['checkoutDate']) ??
-    ((booking['bookingPeriodMonths'] != null)
-      ? _computeCheckoutDate(
-        checkInDate, (booking['bookingPeriodMonths'] as int? ?? 1))
-      : null);
-  final int? bookingPeriodMonths =
-    (booking['bookingPeriodMonths'] is int)
-      ? booking['bookingPeriodMonths'] as int
-      : int.tryParse(booking['bookingPeriodMonths']?.toString() ?? '');
+    final DateTime? checkoutDate = _asDateTime(booking['checkoutDate']) ??
+        ((booking['bookingPeriodMonths'] != null)
+            ? _computeCheckoutDate(
+                checkInDate, (booking['bookingPeriodMonths'] as int? ?? 1))
+            : null);
+    final int? bookingPeriodMonths = (booking['bookingPeriodMonths'] is int)
+        ? booking['bookingPeriodMonths'] as int
+        : int.tryParse(booking['bookingPeriodMonths']?.toString() ?? '');
     final paymentDate = _asDateTime(
             paymentInfo['paymentCompletedAt'] ?? booking['createdAt']) ??
         DateTime.now();

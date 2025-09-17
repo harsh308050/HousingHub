@@ -183,8 +183,8 @@ class _TenantProfileTabState extends State<TenantProfileTab>
 
     return Container(
       width: width - 20,
-      height: height * 0.25,
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+      height: height * 0.3,
+      alignment: Alignment.center,
       margin: EdgeInsets.only(top: 10),
       decoration: const BoxDecoration(
         borderRadius: BorderRadius.all(Radius.circular(12)),

@@ -785,6 +785,7 @@ class Api {
         'userType': 'owner', // Adding user type for future reference
         'createdAt': FieldValue.serverTimestamp(),
         'uid': uid,
+        'approvalStatus': 'not-submitted',
         // Do not store password in Firestore
       }, SetOptions(merge: true)); // Use merge to update existing documents
 
@@ -2160,7 +2161,8 @@ class Api {
         dataToSave['propertyId'] = propertyId;
         dataToSave['viewedAt'] = FieldValue.serverTimestamp();
         // Make sure ownerEmail exists for collectionGroup aggregations
-        final ownerEmail = (propertyData['ownerEmail']?.toString() ?? '').trim().toLowerCase();
+        final ownerEmail =
+            (propertyData['ownerEmail']?.toString() ?? '').trim().toLowerCase();
         if (ownerEmail.isNotEmpty) {
           dataToSave['ownerEmail'] = ownerEmail;
         }
@@ -2548,6 +2550,78 @@ class Api {
     }
   }
 
+  // =============================
+  // OWNER APPROVAL (KYC-lite)
+  // States: 'pending' | 'approved' | 'rejected'
+  // Fields stored in Owners/<email> document:
+  //   approvalStatus: string
+  //   idProof: { type: string, url: string, uploadedAt: Timestamp }
+  //   approvalRequestedAt: Timestamp
+  //   approvalUpdatedAt: Timestamp
+  //   rejectionReason?: string
+
+  /// Upload owner identity proof and set approvalStatus to 'pending'.
+  static Future<void> uploadOwnerIdProofAndRequestApproval({
+    required String email,
+    required File proofImageFile,
+    required String proofType,
+  }) async {
+    try {
+      if (email.isEmpty) throw Exception('Email required');
+      // Upload proof image
+      final url =
+          await uploadImageToCloudinary(proofImageFile, 'owner_id_proofs');
+
+      final docRef = _firestore.collection('Owners').doc(email);
+      await docRef.set({
+        'approvalStatus': 'pending',
+        'approvalRequestedAt': FieldValue.serverTimestamp(),
+        'approvalUpdatedAt': FieldValue.serverTimestamp(),
+        'rejectionReason': FieldValue.delete(),
+        'idProof': {
+          'type': proofType,
+          'url': url,
+          'uploadedAt': FieldValue.serverTimestamp(),
+        },
+      }, SetOptions(merge: true));
+    } catch (e) {
+      print('Error requesting owner approval: $e');
+      rethrow;
+    }
+  }
+
+  /// Stream approval status string for an owner email.
+  static Stream<String?> streamOwnerApprovalStatus(String email) {
+    return _firestore.collection('Owners').doc(email).snapshots().map((snap) {
+      if (!snap.exists) return null;
+      final data = snap.data() as Map<String, dynamic>;
+      return data['approvalStatus']?.toString();
+    });
+  }
+
+  /// Get current approval status once.
+  static Future<String?> getOwnerApprovalStatus(String email) async {
+    try {
+      final snap = await _firestore.collection('Owners').doc(email).get();
+      if (!snap.exists) return null;
+      final data = snap.data() as Map<String, dynamic>;
+      return data['approvalStatus']?.toString();
+    } catch (e) {
+      print('Error getting approval status: $e');
+      return null;
+    }
+  }
+
+  /// Convenience: re-submit approval with a new proof image.
+  static Future<void> resubmitOwnerApproval({
+    required String email,
+    required File proofImageFile,
+    required String proofType,
+  }) async {
+    return uploadOwnerIdProofAndRequestApproval(
+        email: email, proofImageFile: proofImageFile, proofType: proofType);
+  }
+
   // Helper function to format display name from email (fallback)
   static String _formatDisplayNameFromEmail(String email) {
     if (email.isEmpty) return 'Unknown User';
@@ -2848,8 +2922,8 @@ class Api {
   }
 
   // Get notifications for a user - handles both chat and booking notifications
-  static Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>> getNotificationsStream(
-      String userEmail) {
+  static Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+      getNotificationsStream(String userEmail) {
     try {
       // Use a query that can handle both receiverEmail (chat) and recipientEmail (booking)
       // We need to use two separate queries and merge the results
@@ -2858,17 +2932,17 @@ class Api {
           .where('receiverEmail', isEqualTo: userEmail)
           .limit(100)
           .snapshots();
-          
-      Stream<QuerySnapshot<Map<String, dynamic>>> bookingNotifications = _firestore
-          .collection('Notifications')
-          .where('recipientEmail', isEqualTo: userEmail)
-          .limit(100)
-          .snapshots();
-          
+
+      Stream<QuerySnapshot<Map<String, dynamic>>> bookingNotifications =
+          _firestore
+              .collection('Notifications')
+              .where('recipientEmail', isEqualTo: userEmail)
+              .limit(100)
+              .snapshots();
+
       // Merge the two streams
       return rx.CombineLatestStream.combine2(
-          chatNotifications,
-          bookingNotifications,
+          chatNotifications, bookingNotifications,
           (QuerySnapshot<Map<String, dynamic>> chatSnap,
               QuerySnapshot<Map<String, dynamic>> bookingSnap) {
         // Combine both results into a single list
@@ -2878,7 +2952,7 @@ class Api {
         // If any error occurs, fall back to basic query
         return getNotificationsStreamFallback(userEmail)
             .map((snapshot) => snapshot.docs.toList());
-      });  
+      });
     } catch (e) {
       print('Error setting up notification streams: $e');
       return getNotificationsStreamFallback(userEmail)
@@ -2927,21 +3001,22 @@ class Api {
 
       // Create a batch to update all notifications
       final batch = _firestore.batch();
-      
+
       // Add chat notifications to batch
       for (final doc in chatNotifications.docs) {
         batch.update(doc.reference, {'isRead': true});
       }
-      
+
       // Add booking notifications to batch
       for (final doc in bookingNotifications.docs) {
         batch.update(doc.reference, {'isRead': true});
       }
-      
+
       // Commit the batch
       await batch.commit();
-      
-      print('Marked ${chatNotifications.docs.length + bookingNotifications.docs.length} notifications as read');
+
+      print(
+          'Marked ${chatNotifications.docs.length + bookingNotifications.docs.length} notifications as read');
     } catch (e) {
       print('Error marking all notifications as read: $e');
     }
@@ -3161,7 +3236,8 @@ class Api {
       final propertyId = bookingData['propertyId'] as String?;
 
       // Handle property availability changes when booking is approved/accepted
-      if ((newStatus == 'Approved' || newStatus == 'Accepted') && propertyId != null) {
+      if ((newStatus == 'Approved' || newStatus == 'Accepted') &&
+          propertyId != null) {
         // Mark property as unavailable since booking is approved
         try {
           // Prepare tenant snapshot and period/date info
@@ -3811,18 +3887,18 @@ class Api {
         .where('receiverEmail', isEqualTo: userEmail)
         .where('isRead', isEqualTo: false)
         .snapshots();
-        
+
     // Get unread booking notifications count
-    Stream<QuerySnapshot<Map<String, dynamic>>> bookingNotifications = _firestore
-        .collection('Notifications')
-        .where('recipientEmail', isEqualTo: userEmail)
-        .where('isRead', isEqualTo: false)
-        .snapshots();
-        
+    Stream<QuerySnapshot<Map<String, dynamic>>> bookingNotifications =
+        _firestore
+            .collection('Notifications')
+            .where('recipientEmail', isEqualTo: userEmail)
+            .where('isRead', isEqualTo: false)
+            .snapshots();
+
     // Combine both streams and return the total count
     return rx.CombineLatestStream.combine2(
-        chatNotifications,
-        bookingNotifications,
+        chatNotifications, bookingNotifications,
         (QuerySnapshot<Map<String, dynamic>> chatSnap,
             QuerySnapshot<Map<String, dynamic>> bookingSnap) {
       return chatSnap.docs.length + bookingSnap.docs.length;
