@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/Helper/ShimmerHelper.dart';
 import 'package:housinghub/config/AppConfig.dart';
@@ -11,6 +12,13 @@ import 'TenantSearchScreen.dart';
 import 'TenantBookmarkScreen.dart';
 import 'TenantMessageScreen.dart';
 import 'TenantProfileScreen.dart';
+
+// Simple coordinate holder for caching geocoded city locations
+class _Coord {
+  final double lat;
+  final double lng;
+  const _Coord(this.lat, this.lng);
+}
 
 // Using Property class from API.dart
 
@@ -32,6 +40,91 @@ class _TenantHomeScreenState extends State<TenantHomeScreen>
   String _currentCity = 'Loading...';
   String? _selectedState;
   bool _isLocationDetected = false;
+
+  // Cache: stateNameLower -> (cityNameLower -> Coord)
+  static final Map<String, Map<String, _Coord>> _cityCoordsCache = {};
+
+  static const double _citySelectionRadiusMeters = 50000; // 50 km
+
+  String _normalizeCity(String? name) => (name ?? '').toLowerCase().trim();
+
+  Future<_Coord?> _geocodeCity(String city, String? stateName) async {
+    try {
+      final stateKey = _normalizeCity(stateName);
+      final cityKey = _normalizeCity(city);
+      // Return cached if present
+      final cached = _cityCoordsCache[stateKey]?[cityKey];
+      if (cached != null) return cached;
+
+      // Query like "City, State, India" for better accuracy
+      final query = stateName == null || stateName.isEmpty
+          ? '$city, India'
+          : '$city, $stateName, India';
+      final results = await locationFromAddress(query);
+      if (results.isEmpty) return null;
+      final loc = results.first;
+
+      // Save cache
+      _cityCoordsCache.putIfAbsent(stateKey, () => {});
+      _cityCoordsCache[stateKey]![cityKey] = _Coord(loc.latitude, loc.longitude);
+      return _cityCoordsCache[stateKey]![cityKey];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String> _resolveCityByDistance(Position pos, String detectedCity, String? stateName) async {
+    try {
+      // 0) If no state, we cannot get the state's city list; keep detected city
+      if ((stateName ?? '').isEmpty) return detectedCity;
+
+      // 1) Get state code and available cities list
+      final states = await Api.getIndianStates();
+      final stateEntry = states.firstWhere(
+        (e) => _normalizeCity(e['name']) == _normalizeCity(stateName),
+        orElse: () => const {'name': '', 'code': ''},
+      );
+      final stateCode = (stateEntry['code'] ?? '').toString();
+      if (stateCode.isEmpty) return detectedCity;
+
+      final cities = await Api.getCitiesForState(stateCode);
+      if (cities.isEmpty) return detectedCity;
+
+      // 2) Exact case-insensitive match
+      final exact = cities.firstWhere(
+        (c) => _normalizeCity(c) == _normalizeCity(detectedCity),
+        orElse: () => '',
+      );
+      if (exact.isNotEmpty) return exact;
+
+      // 3) Find nearest city by geodesic distance
+      String? bestCity;
+      double bestDistance = double.infinity;
+
+      for (final city in cities) {
+        final coord = await _geocodeCity(city, stateName);
+        if (coord == null) continue;
+        final d = Geolocator.distanceBetween(pos.latitude, pos.longitude, coord.lat, coord.lng);
+        if (d < bestDistance) {
+          bestDistance = d;
+          bestCity = city;
+        }
+      }
+
+      if (bestCity != null) {
+        // If within radius, choose it; otherwise still choose nearest to avoid invalid locality
+        if (bestDistance <= _citySelectionRadiusMeters) {
+          return bestCity;
+        }
+        return bestCity; // fallback to nearest even if slightly beyond radius
+      }
+
+      // 4) As a final fallback, choose the first available city
+      return cities.first;
+    } catch (_) {
+      return detectedCity;
+    }
+  }
 
   @override
   void initState() {
@@ -148,9 +241,15 @@ class _TenantHomeScreenState extends State<TenantHomeScreen>
       Map<String, String?> locationData =
           await Api.getCityFromLocation(position.latitude, position.longitude);
 
+  final detectedCity = locationData['city'] ?? 'Unknown City';
+  final detectedState = locationData['state'];
+
+  // Resolve by nearest available dropdown city based on GPS radius
+  final resolvedCity = await _resolveCityByDistance(position, detectedCity, detectedState);
+
       setState(() {
-        _currentCity = locationData['city'] ?? 'Unknown City';
-        _selectedState = locationData['state'];
+        _currentCity = resolvedCity;
+        _selectedState = detectedState;
         _isLocationDetected = true;
         _updateScreensWithNewData();
       });
@@ -1187,12 +1286,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                               if (loadingProgress == null) return child;
                               return Container(
                                 color: Colors.grey[200],
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                        AppConfig.primaryColor),
-                                  ),
-                                ),
+                                child: ShimmerHelper.propertyCardShimmer(),
                               );
                             },
                             errorBuilder: (context, error, stackTrace) {
