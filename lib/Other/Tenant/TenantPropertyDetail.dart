@@ -6,6 +6,7 @@ import 'package:housinghub/config/AppConfig.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:housinghub/Helper/API.dart';
+import 'package:housinghub/Helper/Models.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../Chat/ChatScreen.dart';
@@ -327,7 +328,6 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
     final createdAt = widget.propertyData?['createdAt'] != null
         ? _formatCreatedAt(widget.propertyData!['createdAt'])
         : 'Unknown date';
-
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
@@ -357,7 +357,8 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
         ),
         title: Text(
           propertyTitle,
-          style: TextStyle(color: Colors.black),
+          style: TextStyle(
+              color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold),
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
@@ -709,21 +710,21 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
 
       // Bottom action buttons
       bottomSheet: Container(
-        height: height * 0.15,
+        height: height * 0.18,
         decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: [
             BoxShadow(
               color: Colors.black12,
               blurRadius: 5,
-              // offset: Offset(0, -2),
             ),
           ],
         ),
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             spacing: height * 0.01,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Row(
                 children: [
@@ -793,11 +794,8 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                         if (me == null ||
                             ownerEmail == null ||
                             ownerEmail.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text(
-                                    'Sign in to chat or owner info missing')),
-                          );
+                          Models.showWarningSnackBar(
+                              context, 'Sign in to chat or owner info missing');
                           return;
                         }
                         Navigator.push(
@@ -813,8 +811,8 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                         );
                       },
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.blue,
-                        side: BorderSide(color: Colors.blue),
+                        foregroundColor: AppConfig.primaryColor,
+                        side: BorderSide(color: AppConfig.primaryColor),
                         padding: EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -835,11 +833,8 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                     child: ElevatedButton(
                       onPressed: () {
                         if (_isUnavailable) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text(
-                                    'This property is not available for booking.')),
-                          );
+                          Models.showWarningSnackBar(context,
+                              'This property is not available for booking.');
                           return;
                         }
                         _navigateToBooking();
@@ -1210,14 +1205,10 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
     final Uri url = Uri.parse(urlString);
     try {
       if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open maps application')),
-        );
+        Models.showErrorSnackBar(context, 'Could not open maps application');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error launching maps: $e')),
-      );
+      Models.showErrorSnackBar(context, 'Error launching maps: $e');
     }
   }
 
@@ -1274,9 +1265,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
         subject: 'Check out this property on HousingHub',
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error sharing property: $e')),
-      );
+      Models.showErrorSnackBar(context, 'Error sharing property: $e');
     }
   }
 
@@ -1284,8 +1273,8 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
     final user = FirebaseAuth.instance.currentUser;
     final propertyId = widget.propertyData?['id'] ?? widget.propertyId;
     if (user?.email == null || propertyId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Please sign in to save properties')));
+      Models.showWarningSnackBar(
+          context, 'Please sign in to save properties');
       return;
     }
 
@@ -1306,26 +1295,21 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
             propertyId: propertyId,
             propertyData: data);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Property saved')),
-          );
+          Models.showSuccessSnackBar(context, 'Property saved');
         }
       } else {
         // Remove
         await Api.removeSavedProperty(
             tenantEmail: tenantEmail, propertyId: propertyId);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Removed from saved')),
-          );
+          Models.showInfoSnackBar(context, 'Removed from saved');
         }
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isSaved = wasSaved); // revert
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating saved property: $e')),
-        );
+        Models.showErrorSnackBar(
+            context, 'Error updating saved property: $e');
       }
     }
   }
@@ -1333,25 +1317,21 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
   Future<void> _navigateToBooking() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user?.email == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please sign in to book this property')),
-      );
+      Models.showWarningSnackBar(
+          context, 'Please sign in to book this property');
       return;
     }
 
     if (_isUnavailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('This property is not available for booking.')),
-      );
+      Models.showWarningSnackBar(
+          context, 'This property is not available for booking.');
       return;
     }
 
     // Validate required property data
     if (widget.propertyData == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Property information is incomplete')),
-      );
+      Models.showErrorSnackBar(
+          context, 'Property information is incomplete');
       return;
     }
 
@@ -1366,9 +1346,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error opening booking: $e')),
-        );
+        Models.showErrorSnackBar(context, 'Error opening booking: $e');
       }
     }
   }

@@ -7,6 +7,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:housinghub/Helper/Models.dart';
 import '../../Helper/API.dart';
 import '../../Helper/ShimmerHelper.dart';
 
@@ -145,9 +146,27 @@ class _AddPropertyState extends State<AddProperty> {
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.arrow_back_ios_new,
+                  size: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ),
         ),
         title: Text(
           textAlign: TextAlign.center,
@@ -272,12 +291,8 @@ class _AddPropertyState extends State<AddProperty> {
                                 } else {
                                   if (_formKey.currentState!.validate()) {
                                     if (propertyImages.isEmpty) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                            content: Text(
-                                                'Please add at least one property image')),
-                                      );
+                                      Models.showWarningSnackBar(context,
+                                          'Please add at least one property image');
                                     } else {
                                       _savePropertyToFirestore();
                                     }
@@ -1316,9 +1331,8 @@ class _AddPropertyState extends State<AddProperty> {
         if (fileSizeInMB > 50) {
           print(
               'Video file is too large: ${fileSizeInMB.toStringAsFixed(2)}MB');
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(
-                  'Video size exceeds 50MB. Please select a smaller video.')));
+          Models.showWarningSnackBar(context,
+              'Video size exceeds 50MB. Please select a smaller video.');
           return;
         }
 
@@ -1391,9 +1405,8 @@ class _AddPropertyState extends State<AddProperty> {
         final User? user = FirebaseAuth.instance.currentUser;
         if (user == null) {
           Navigator.of(context).pop(); // Close loading dialog
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('You must be logged in to add a property')),
-          );
+          Models.showWarningSnackBar(
+              context, 'You must be logged in to add a property');
           return;
         }
 
@@ -1440,9 +1453,7 @@ class _AddPropertyState extends State<AddProperty> {
           Navigator.of(context).pop();
 
           // Show success message
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Property added successfully!')),
-          );
+          Models.showSuccessSnackBar(context, 'Property added successfully!');
 
           // Navigate back after a short delay
           Future.delayed(Duration(seconds: 1), () {
@@ -1470,18 +1481,7 @@ class _AddPropertyState extends State<AddProperty> {
               'Permission denied: You do not have permission to add a property.';
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            duration: Duration(seconds: 8),
-            action: SnackBarAction(
-              label: 'OK',
-              onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              },
-            ),
-          ),
-        );
+        Models.showErrorSnackBar(context, errorMessage);
       } finally {
         setState(() {
           _isSubmitting = false;

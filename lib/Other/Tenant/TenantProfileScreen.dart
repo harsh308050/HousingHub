@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:housinghub/Helper/Models.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
@@ -312,14 +313,11 @@ class _TenantProfileTabState extends State<TenantProfileTab>
           .doc(email)
           .set({'photoUrl': url}, SetOptions(merge: true));
       setState(() => photoUrl = url);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Profile photo updated')));
+    if (!mounted) return;
+    Models.showSuccessSnackBar(context, 'Profile photo updated');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update photo: $e')),
-      );
+      Models.showErrorSnackBar(context, 'Failed to update photo: $e');
     }
   }
 
@@ -348,13 +346,11 @@ class _TenantProfileTabState extends State<TenantProfileTab>
         mobile = phone;
         gender = g;
       });
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Profile saved')));
+    if (!mounted) return;
+    Models.showSuccessSnackBar(context, 'Profile saved');
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+    if (!mounted) return;
+    Models.showErrorSnackBar(context, 'Failed to save: $e');
     }
   }
 }
@@ -440,8 +436,7 @@ class _DocumentTileState extends State<_DocumentTile> {
   Future<void> _pickAndUpload() async {
     if (widget.options.length > 1 &&
         (_selectedOption == null || _selectedOption!.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select a document type')));
+    Models.showWarningSnackBar(context, 'Please select a document type');
       return;
     }
     try {
@@ -468,13 +463,11 @@ class _DocumentTileState extends State<_DocumentTile> {
         'status': 'Uploaded',
         'uploadedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${widget.label} uploaded')));
+    if (!mounted) return;
+    Models.showSuccessSnackBar(context, '${widget.label} uploaded');
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Upload failed: $e')));
+    if (!mounted) return;
+    Models.showErrorSnackBar(context, 'Upload failed: $e');
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -724,23 +717,12 @@ class _PreferencesTabState extends State<_PreferencesTab> {
                 const SizedBox(height: 16),
                 SizedBox(
                     width: width - 20,
-                    child: ElevatedButton.icon(
+                    child: ElevatedButton(
                       onPressed: _saving ? null : _save,
-                      icon: _saving
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Icon(Icons.save_outlined,
-                              color: Colors.white),
-                      label: const Text('Save changes'),
+                      child: Text('Save changes'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue, // Button background
+                        backgroundColor:
+                            AppConfig.primaryColor, // Button background
                         foregroundColor: Colors.white, // Text and icon color
                         shape: RoundedRectangleBorder(
                           borderRadius:
@@ -887,9 +869,7 @@ class _BookingsTab extends StatelessWidget {
 
         Navigator.pushReplacementNamed(context, 'LoginScreen');
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error signing out: $e')),
-        );
+        Models.showErrorSnackBar(context, 'Error signing out: $e');
       }
     }
 

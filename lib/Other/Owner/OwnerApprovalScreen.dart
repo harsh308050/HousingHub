@@ -7,6 +7,7 @@ import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:housinghub/Helper/Models.dart';
 
 class OwnerApprovalScreen extends StatefulWidget {
   const OwnerApprovalScreen({super.key});
@@ -41,9 +42,7 @@ class _OwnerApprovalScreenState extends State<OwnerApprovalScreen> {
   Future<void> _submit() async {
     if (_email == null || _email!.isEmpty) return;
     if (_selectedImage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select an ID proof image.')),
-      );
+      Models.showWarningSnackBar(context, 'Please select an ID proof image.');
       return;
     }
     setState(() => _isSubmitting = true);
@@ -53,16 +52,12 @@ class _OwnerApprovalScreenState extends State<OwnerApprovalScreen> {
         proofImageFile: _selectedImage!,
         proofType: _proofType,
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Submitted for approval.')),
-      );
+      Models.showSuccessSnackBar(context, 'Submitted for approval.');
       setState(() {
         _status = 'pending';
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      Models.showErrorSnackBar(context, 'Error: $e');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

@@ -2,7 +2,7 @@
 
 <img src="assets/images/Logo.png" alt="HousingHub Logo" width="200"/>
 
-## 📱 Project Overview *(Under Development)*
+## 📱 Project Overview *(Under Testing)*
 
 HousingHub is a mobile application that connects tenants searching for accommodations with property owners who want to list their properties. The app focuses on easy property discovery and direct tenant-owner communication.
 

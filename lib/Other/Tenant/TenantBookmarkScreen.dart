@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:housinghub/Helper/Models.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:housinghub/Helper/API.dart';
@@ -22,10 +23,18 @@ class _TenantBookmarksTabState extends State<TenantBookmarksTab> {
     if (_user?.email == null) {
       return Scaffold(
         appBar: AppBar(
+          centerTitle: true,
           elevation: 0,
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
-          title: const Text('Saved Listings'),
+          title: const Text(
+            'Saved Listings',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
         ),
         body: Center(
           child: Padding(
@@ -53,10 +62,11 @@ class _TenantBookmarksTabState extends State<TenantBookmarksTab> {
           backgroundColor: Colors.white,
           appBar: AppBar(
             elevation: 0,
+            centerTitle: true,
             backgroundColor: Colors.white,
             foregroundColor: Colors.black,
             title: const Text('Saved Listings',
-                style: TextStyle(fontWeight: FontWeight.w600)),
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 20)),
             leading: Navigator.canPop(context)
                 ? IconButton(
                     icon: const Icon(Icons.arrow_back),
@@ -179,8 +189,7 @@ class _TenantBookmarksTabState extends State<TenantBookmarksTab> {
           tenantEmail: _user!.email!, propertyId: doc['id']);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Error: $e')));
+    Models.showErrorSnackBar(context, 'Error: $e');
     }
   }
 }

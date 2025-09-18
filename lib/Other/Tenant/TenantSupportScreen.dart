@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:housinghub/Helper/Models.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -12,9 +13,27 @@ class TenantSupportScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.arrow_back_ios_new,
+                  size: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ),
         ),
         title: const Text('Help & Support',
             style: TextStyle(color: Colors.black87)),
@@ -151,9 +170,7 @@ class TenantSupportScreen extends StatelessWidget {
   }
 
   static void _toast(BuildContext context, String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
-    );
+    Models.showInfoSnackBar(context, msg);
   }
 }
 

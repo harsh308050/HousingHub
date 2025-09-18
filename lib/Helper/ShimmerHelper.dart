@@ -85,68 +85,95 @@ class ShimmerHelper {
                         ),
                       ],
                     ),
-                    // Property Info section (below image)
-                    Expanded(
+                    // Property Info section (below image) with overflow guards
+                    Flexible(
+                      fit: FlexFit.tight,
                       child: Padding(
                         padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Price and room type row
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            // Default target heights
+                            const double priceH = 16;
+                            const double priceW = 100;
+                            const double roomH = 14;
+                            const double roomW = 60;
+                            const double gap = 6;
+                            const double icon = 12;
+                            const double textH = 12;
+
+                            // Total desired vertical content: price row + gap + location row
+                            const double desired = priceH + gap + textH;
+                            final double avail = constraints.maxHeight.isFinite
+                                ? constraints.maxHeight
+                                : desired;
+                            final double scale =
+                                (avail / desired).clamp(0.6, 1.2);
+
+                            final double sPriceH =
+                                (priceH * scale).clamp(10, 18);
+                            final double sRoomH = (roomH * scale).clamp(10, 18);
+                            final double sGap = (gap * scale).clamp(2, 8);
+                            final double sIcon = (icon * scale).clamp(8, 14);
+                            final double sTextH = (textH * scale).clamp(8, 14);
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Price placeholder
-                                Container(
-                                  height: 16,
-                                  width: 100,
-                                  decoration: BoxDecoration(
-                                    color: Colors
-                                        .white, // White for better visibility
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                ),
-                                // Room type placeholder
-                                Container(
-                                  height: 14,
-                                  width: 60,
-                                  decoration: BoxDecoration(
-                                    color: Colors
-                                        .white, // White for better visibility
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            // Location row with icon
-                            Row(
-                              children: [
-                                // Location icon placeholder
-                                Container(
-                                  width: 12,
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    color: Colors
-                                        .white, // White for better visibility
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                                const SizedBox(width: 6), // Increased spacing
-                                // Location text placeholder
-                                Expanded(
-                                  child: Container(
-                                    height: 12,
-                                    decoration: BoxDecoration(
-                                      color: Colors
-                                          .white, // White for better visibility
-                                      borderRadius: BorderRadius.circular(4),
+                                // Price and room type row
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    // Price placeholder
+                                    Container(
+                                      height: sPriceH,
+                                      width: priceW,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
                                     ),
-                                  ),
+                                    // Room type placeholder
+                                    Container(
+                                      height: sRoomH,
+                                      width: roomW,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: sGap),
+                                // Location row with icon
+                                Row(
+                                  children: [
+                                    // Location icon placeholder
+                                    Container(
+                                      width: sIcon,
+                                      height: sIcon,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    // Location text placeholder
+                                    Expanded(
+                                      child: Container(
+                                        height: sTextH,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
-                            ),
-                          ],
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -167,6 +194,7 @@ class ShimmerHelper {
         padding: const EdgeInsets.all(16),
         child: ListView.builder(
           itemCount: 3,
+          shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemBuilder: (context, index) {
             return Container(
@@ -610,108 +638,124 @@ class ShimmerHelper {
           builder: (context, constraints) {
             final nameWidth = (constraints.maxWidth * 0.45).clamp(80.0, 180.0);
             final msgWidth = (constraints.maxWidth * 0.6).clamp(120.0, 240.0);
-            return Column(
-              children: List.generate(8, (index) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        // Avatar with online status indicator placeholder
-                        Stack(
-                          children: [
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: const BoxDecoration(
+            final list = List.generate(8, (index) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      // Avatar with online status indicator placeholder
+                      Stack(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          // Online status indicator placeholder
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              width: 14,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
                                 shape: BoxShape.circle,
-                                color: Colors.grey,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
                               ),
                             ),
-                            // Online status indicator placeholder
-                            Positioned(
-                              right: 0,
-                              bottom: 0,
-                              child: Container(
-                                width: 14,
-                                height: 14,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[300],
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 2,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 16),
+
+                      // Message content
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Name and time row
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Name placeholder
+                                Container(
+                                  height: 18,
+                                  width: nameWidth,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[300],
+                                    borderRadius: BorderRadius.circular(4),
                                   ),
                                 ),
+                                // Time placeholder
+                                Container(
+                                  height: 14,
+                                  width: 50,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[300],
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            // Last message placeholder
+                            Container(
+                              height: 16,
+                              width: msgWidth,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(4),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(width: 16),
+                      ),
 
-                        // Message content
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Name and time row
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  // Name placeholder
-                                  Container(
-                                    height: 18,
-                                    width: nameWidth,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[300],
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                  ),
-                                  // Time placeholder
-                                  Container(
-                                    height: 14,
-                                    width: 50,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[300],
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              // Last message placeholder
-                              Container(
-                                height: 16,
-                                width: msgWidth,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[300],
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
-                            ],
+                      // Unread indicator placeholder (sometimes visible)
+                      if (index % 3 == 0)
+                        Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(left: 8),
+                          decoration: const BoxDecoration(
+                            color: Colors.grey,
+                            shape: BoxShape.circle,
                           ),
                         ),
-
-                        // Unread indicator placeholder (sometimes visible)
-                        if (index % 3 == 0)
-                          Container(
-                            width: 8,
-                            height: 8,
-                            margin: const EdgeInsets.only(left: 8),
-                            decoration: const BoxDecoration(
-                              color: Colors.grey,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                      ],
-                    ),
+                    ],
                   ),
-                );
-              }),
+                ),
+              );
+            });
+
+            return SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
+              child: Column(children: list),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  // Location Text Shimmer for header location display
+  static Widget locationTextShimmer({double width = 120}) {
+    return baseShimmer(
+      child: Container(
+        height: 16,
+        width: width,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(4),
         ),
       ),
     );

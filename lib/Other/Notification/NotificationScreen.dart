@@ -5,6 +5,7 @@ import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/Helper/ShimmerHelper.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import '../Chat/ChatScreen.dart';
+import 'package:housinghub/Helper/Models.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -47,6 +48,29 @@ class _NotificationScreenState extends State<NotificationScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
+        centerTitle: true,
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.arrow_back_ios_new,
+                  size: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ),
+        ),
         title: Text(
           'Notifications',
           style: TextStyle(
@@ -58,21 +82,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0.5,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.done_all),
-            onPressed: () {
-              Api.markAllNotificationsAsRead(_currentUserEmail);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('All notifications marked as read'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
-            tooltip: 'Mark all as read',
-          ),
-        ],
       ),
       body: StreamBuilder<dynamic>(
         stream: _useFallbackStream
@@ -292,12 +301,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
               Api.markNotificationAsRead(notification['notificationId']);
             }
             // For booking notifications, we don't navigate anywhere yet
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Booking notification viewed'),
-                duration: Duration(seconds: 2),
-              ),
-            );
+            Models.showInfoSnackBar(context, 'Booking notification viewed');
           } else {
             // For chat notifications
             _navigateToChat(senderEmail, senderName);

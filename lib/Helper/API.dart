@@ -1820,15 +1820,22 @@ class Api {
       if (placemarks.isNotEmpty) {
         final Placemark place = placemarks.first;
         String? detectedState = place.administrativeArea;
-        String? detectedCity = place.locality ?? place.subAdministrativeArea;
+        // Prefer locality (city). Do not default to village/subLocality here.
+        // Keep district (subAdministrativeArea) separately for smarter resolution.
+        String? detectedCity = place.locality;
+        String? detectedDistrict = place.subAdministrativeArea;
 
-        return {'city': detectedCity, 'state': detectedState};
+        return {
+          'city': detectedCity,
+          'state': detectedState,
+          'district': detectedDistrict,
+        };
       }
 
-      return {'city': 'Unknown City', 'state': null};
+      return {'city': 'Unknown City', 'state': null, 'district': null};
     } catch (e) {
       print('Error getting location address: $e');
-      return {'city': 'Unknown City', 'state': null};
+      return {'city': 'Unknown City', 'state': null, 'district': null};
     }
   }
 
@@ -3311,14 +3318,25 @@ class Api {
       // Handle property availability when booking is completed or tenant moves out
       else if ((newStatus == 'Completed' || newStatus == 'CheckedOut') &&
           propertyId != null) {
-        // Mark property as available again
+        // Mark property as available again and clear any tenant-related fields
+        // to mirror the auto-revert cleanup behavior.
         try {
-          await markPropertyAsAvailable(propertyId);
+          await markPropertyAsAvailable(propertyId, {
+            'currentTenant': null,
+            'currentBookingId': null,
+            'currentBookingStatus': null,
+            'autoRevertAt': null,
+            'checkInDate': null,
+            'checkoutDate': null,
+            'bookingPeriodMonths': null,
+            'currentRent': null,
+            'currentSecurityDeposit': null,
+          });
           print(
-              'Property $propertyId marked as available after booking completion');
+              'Property $propertyId marked as available and cleaned after booking completion');
         } catch (e) {
           print(
-              'Warning: Could not update property availability after completion: $e');
+              'Warning: Could not update property availability/cleanup after completion: $e');
           // Don't fail the entire booking update
         }
       }
@@ -3365,6 +3383,10 @@ class Api {
           notificationMessage =
               'You have successfully checked out from your property.';
           notificationType = 'booking_checkout';
+          break;
+        case 'Completed':
+          notificationMessage = 'Your booking has been marked as completed.';
+          notificationType = 'booking_completed';
           break;
         default:
           notificationMessage =

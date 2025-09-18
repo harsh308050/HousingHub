@@ -9,6 +9,7 @@ import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/Helper/BookingModels.dart';
 import 'package:housinghub/Helper/PdfReceiptGenerator.dart';
 import 'package:housinghub/Helper/LoadingStateManager.dart';
+import 'package:housinghub/Helper/Models.dart';
 
 class BookingScreen extends StatefulWidget {
   final Map<String, dynamic> propertyData;
@@ -149,12 +150,7 @@ class _BookingScreenState extends State<BookingScreen>
       _paymentSignature = response.signature;
       _paymentCompletedAt = DateTime.now();
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Payment successful!'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    Models.showSuccessSnackBar(context, 'Payment successful!');
 
     // Automatically proceed to next step after successful payment
     Future.delayed(const Duration(milliseconds: 1500), () {
@@ -165,20 +161,11 @@ class _BookingScreenState extends State<BookingScreen>
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Payment failed: ${response.message}'),
-        backgroundColor: Colors.red,
-      ),
-    );
+    Models.showErrorSnackBar(context, 'Payment failed: ${response.message}');
   }
 
   void _handleExternalWallet(ExternalWalletResponse response) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('External Wallet: ${response.walletName}'),
-      ),
-    );
+    Models.showInfoSnackBar(context, 'External Wallet: ${response.walletName}');
   }
 
   @override
@@ -195,10 +182,8 @@ class _BookingScreenState extends State<BookingScreen>
 
   void _nextStep() {
     if (_isUnavailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('This property is no longer available for booking.')),
-      );
+      Models.showWarningSnackBar(
+          context, 'This property is no longer available for booking.');
       return;
     }
     if (_currentStep < _totalSteps - 1) {
@@ -236,12 +221,8 @@ class _BookingScreenState extends State<BookingScreen>
             _phoneController.text.isNotEmpty;
       case 2: // Document Selection
         if (!_areAllDocumentsSelected()) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Please select all required documents to continue'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+          Models.showWarningSnackBar(
+              context, 'Please select all required documents to continue');
           return false;
         }
         return true;
@@ -256,10 +237,8 @@ class _BookingScreenState extends State<BookingScreen>
 
   Future<void> _submitBooking() async {
     if (_isUnavailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('This property is no longer available for booking.')),
-      );
+      Models.showWarningSnackBar(
+          context, 'This property is no longer available for booking.');
       return;
     }
     await LoadingStateManager.runWithLoader<Map<String, dynamic>?>(
@@ -467,24 +446,15 @@ class _BookingScreenState extends State<BookingScreen>
       },
       onSuccess: (result) {
         final String? receiptUrl = result?['receiptUrl'] as String?;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                _paymentCompleted && receiptUrl != null && receiptUrl.isNotEmpty
-                    ? 'Booking submitted successfully with receipt!'
-                    : 'Booking request submitted successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        Models.showSuccessSnackBar(
+            context,
+            _paymentCompleted && receiptUrl != null && receiptUrl.isNotEmpty
+                ? 'Booking submitted successfully with receipt!'
+                : 'Booking request submitted successfully!');
         Navigator.of(context).pop(true);
       },
       onError: (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error submitting booking: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        Models.showErrorSnackBar(context, 'Error submitting booking: $e');
       },
     );
   }
@@ -494,13 +464,14 @@ class _BookingScreenState extends State<BookingScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
+        centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
         title: const Text(
           'Book Property',
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 20,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -1096,26 +1067,19 @@ class _BookingScreenState extends State<BookingScreen>
                   child: GestureDetector(
                     onTap: () => _selectDocumentForType(docType),
                     child: Container(
+                      alignment: Alignment.center,
                       padding: const EdgeInsets.symmetric(
                           vertical: 8, horizontal: 12),
                       decoration: BoxDecoration(
                         color: AppConfig.primaryColor,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.folder, color: Colors.white, size: 16),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Select Document',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        'Select Document',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -1125,26 +1089,19 @@ class _BookingScreenState extends State<BookingScreen>
                   child: GestureDetector(
                     onTap: () => _uploadDocumentForType(docType),
                     child: Container(
+                      alignment: Alignment.center,
                       padding: const EdgeInsets.symmetric(
                           vertical: 8, horizontal: 12),
                       decoration: BoxDecoration(
                         color: Colors.green[600],
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.camera_alt, color: Colors.white, size: 16),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Upload New',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        'Upload New',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -1336,21 +1293,12 @@ class _BookingScreenState extends State<BookingScreen>
             };
           });
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('$docType uploaded successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          Models.showSuccessSnackBar(
+              context, '$docType uploaded successfully!');
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error uploading document: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      Models.showErrorSnackBar(context, 'Error uploading document: $e');
     }
   }
 
@@ -1511,34 +1459,28 @@ class _BookingScreenState extends State<BookingScreen>
           const SizedBox(height: 24),
 
           if (!_paymentCompleted)
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  if (_isUnavailable) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text(
-                              'This property is no longer available for booking.')),
-                    );
-                    return;
-                  }
-                  _makePayment(total);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppConfig.primaryColor,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+            ElevatedButton(
+              onPressed: () {
+                if (_isUnavailable) {
+                  Models.showWarningSnackBar(context,
+                      'This property is no longer available for booking.');
+                  return;
+                }
+                _makePayment(total);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppConfig.primaryColor,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
-                  'Pay Now',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
+              ),
+              child: const Text(
+                'Pay Now',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
                 ),
               ),
             )
@@ -1952,10 +1894,8 @@ class _BookingScreenState extends State<BookingScreen>
 
   void _makePayment(double amount) {
     if (_isUnavailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('This property is no longer available for booking.')),
-      );
+      Models.showWarningSnackBar(
+          context, 'This property is no longer available for booking.');
       return;
     }
     var options = {
@@ -1968,7 +1908,7 @@ class _BookingScreenState extends State<BookingScreen>
         'email': FirebaseAuth.instance.currentUser?.email ?? '',
       },
       'theme': {
-        'color': AppConfig.primaryColor.value.toRadixString(16),
+        'color': AppConfig.primaryColor,
       }
     };
 
@@ -1976,12 +1916,7 @@ class _BookingScreenState extends State<BookingScreen>
       _razorpay.open(options);
     } catch (e) {
       print('Error opening Razorpay: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Error opening payment gateway'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      Models.showErrorSnackBar(context, 'Error opening payment gateway');
     }
   }
 

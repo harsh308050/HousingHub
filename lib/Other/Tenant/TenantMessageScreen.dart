@@ -182,15 +182,16 @@ class _TenantMessagesTabState extends State<TenantMessagesTab> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const SizedBox(width: 16),
           const Text(
             textAlign: TextAlign.center,
             'Messages',
             style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: Colors.black,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
             ),
           ),
         ],

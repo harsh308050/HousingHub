@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:housinghub/Helper/Models.dart';
 
 /// A utility class to manage loading states safely in Flutter
 class LoadingStateManager {
@@ -66,16 +67,13 @@ class LoadingStateManager {
       if (!operationComplete && context.mounted) {
         // Operation timed out
         loadingState(false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Operation timed out. Please try again.')),
-        );
+        Models.showWarningSnackBar(
+            context, 'Operation timed out. Please try again.');
       }
     } catch (e) {
       if (context.mounted) {
         loadingState(false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
-        );
+        Models.showErrorSnackBar(context, 'Error: ${e.toString()}');
       }
     }
   }

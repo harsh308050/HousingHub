@@ -52,7 +52,7 @@ class _OwnerChatTabState extends State<OwnerChatTab> {
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(),
+            Center(child: _buildHeader()),
             _buildSearchBar(),
             Expanded(
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -62,7 +62,7 @@ class _OwnerChatTabState extends State<OwnerChatTab> {
                     return Center(child: Text('Error loading messages'));
                   }
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return ShimmerHelper.listItemShimmer();
+                    return ShimmerHelper.messageListShimmer();
                   }
                   final rooms = [...(snapshot.data?.docs ?? [])];
                   rooms.sort((a, b) {
@@ -183,7 +183,7 @@ class _OwnerChatTabState extends State<OwnerChatTab> {
       child: Text(
         'Messages',
         style: TextStyle(
-          fontSize: 24,
+          fontSize: 20,
           fontWeight: FontWeight.w600,
           color: Colors.black,
         ),

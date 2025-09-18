@@ -9,6 +9,7 @@ import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Other/Chat/TypingIndicator.dart';
 import 'package:housinghub/Helper/ShimmerHelper.dart';
+import 'package:housinghub/Helper/Models.dart';
 
 class ChatScreen extends StatefulWidget {
   final String currentEmail;
@@ -138,12 +139,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       if (mobileNumber == null || mobileNumber.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Phone number not available for this user'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+          Models.showWarningSnackBar(
+              context, 'Phone number not available for this user');
         }
         return;
       }
@@ -168,26 +165,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           await launchUrl(dialUri);
         } else {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                    'No phone app available to make calls\nNumber: $cleanNumber'),
-                backgroundColor: Colors.red,
-                duration: Duration(seconds: 4),
-              ),
-            );
+            Models.showErrorSnackBar(context,
+                'No phone app available to make calls\nNumber: $cleanNumber');
           }
         }
       }
     } catch (e) {
       print('Phone call error: $e'); // Debug log
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        Models.showErrorSnackBar(context, 'Error: $e');
       }
     }
   }
@@ -251,9 +237,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send attachment: $e')),
-        );
+        Models.showErrorSnackBar(
+            context, 'Failed to send attachment: $e');
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -289,9 +274,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send message: $e')),
-        );
+        Models.showErrorSnackBar(context, 'Failed to send message: $e');
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -308,6 +291,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         elevation: 0,
         automaticallyImplyLeading: false,
         titleSpacing: 0,
+        centerTitle: true,
         title: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Row(

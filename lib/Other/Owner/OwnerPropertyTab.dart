@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:housinghub/Helper/Models.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Other/Owner/AddProperty.dart';
 import 'package:housinghub/Other/Owner/EditProperty.dart';
@@ -74,7 +75,9 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(),
+            Center(
+              child: _buildHeader(),
+            ),
             _buildTabBar(),
             Expanded(
               child: _isLoading
@@ -119,12 +122,12 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
     return Container(
       padding: EdgeInsets.all(16),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
             'My Properties',
             style: TextStyle(
-              fontSize: 24,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
               color: Colors.black87,
             ),
@@ -141,6 +144,9 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
         controller: _tabController,
         labelColor: AppConfig.primaryColor,
         indicatorColor: AppConfig.primaryColor,
+        unselectedLabelColor: Colors.grey[600],
+        indicatorWeight: 3,
+        indicatorSize: TabBarIndicatorSize.tab,
         tabs: [
           Tab(text: 'All (${_properties.length})'),
           Tab(text: 'Available'),
@@ -255,9 +261,8 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
 
         // Check if widget is still mounted before showing snackbar
         if (mounted) {
-          ScaffoldMessenger.of(currentContext).showSnackBar(
-            SnackBar(content: Text('Property deleted successfully')),
-          );
+          Models.showSuccessSnackBar(
+              currentContext, 'Property deleted successfully');
           // Refresh property list
           _fetchProperties();
         }
@@ -270,10 +275,8 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
 
         // Check if widget is still mounted before showing snackbar
         if (mounted) {
-          ScaffoldMessenger.of(currentContext).showSnackBar(
-            SnackBar(
-                content: Text('Failed to delete property: ${e.toString()}')),
-          );
+          Models.showErrorSnackBar(
+              currentContext, 'Failed to delete property: ${e.toString()}');
         }
       }
     });

@@ -7,6 +7,7 @@ import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/Helper/BookingModels.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:housinghub/Helper/Models.dart';
 // shimmer removed along with old loading UI
 
 class TenantBookingsScreen extends StatefulWidget {
@@ -43,21 +44,63 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('My Bookings')),
+        appBar: AppBar(
+            title: const Text(
+          'My Bookings',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        )),
         body: const Center(child: Text('Please sign in to view your bookings')),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.arrow_back_ios_new,
+                  size: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ),
+        ),
         centerTitle: true,
-        title: const Text('My Bookings'),
+        title: const Text(
+          'My Bookings',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
         bottom: TabBar(
+          labelColor: AppConfig.primaryColor,
           controller: _tabController,
+          indicatorColor: AppConfig.primaryColor,
+          indicatorSize: TabBarIndicatorSize.tab,
           tabs: const [
-            Tab(text: 'Pending'),
-            Tab(text: 'Active'),
-            Tab(text: 'History'),
+            Tab(
+              text: 'Pending',
+            ),
+            Tab(
+              text: 'Active',
+            ),
+            Tab(
+              text: 'History',
+            ),
           ],
         ),
       ),
@@ -408,7 +451,7 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
             child: ElevatedButton(
               onPressed: () => _contactOwner(bookingData),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
+                backgroundColor: AppConfig.primaryColor,
                 foregroundColor: Colors.white,
               ),
               child: const Text('Contact Owner'),
@@ -471,21 +514,11 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
         );
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Booking cancelled successfully'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          Models.showInfoSnackBar(context, 'Booking cancelled successfully');
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error cancelling booking: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          Models.showErrorSnackBar(context, 'Error cancelling booking: $e');
         }
       }
     }
@@ -495,9 +528,7 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
     try {
       final ownerEmail = (bookingData['ownerEmail'] ?? '').toString();
       if (ownerEmail.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Owner contact not available')),
-        );
+        Models.showWarningSnackBar(context, 'Owner contact not available');
         return;
       }
 
@@ -514,18 +545,14 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
       }
 
       if (mobile == null || mobile.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Owner phone number not found')),
-        );
+        Models.showWarningSnackBar(context, 'Owner phone number not found');
         return;
       }
 
       // Clean and format number for tel: scheme
       final cleanNumber = mobile.replaceAll(RegExp(r'[^\d+]'), '');
       if (cleanNumber.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid owner phone number')),
-        );
+        Models.showWarningSnackBar(context, 'Invalid owner phone number');
         return;
       }
 
@@ -537,15 +564,12 @@ class _TenantBookingsScreenState extends State<TenantBookingsScreen>
         final alt = Uri.parse('tel:$cleanNumber');
         final ok = await canLaunchUrl(alt) && await launchUrl(alt);
         if (!ok) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Unable to open dialer for $cleanNumber')),
-          );
+          Models.showErrorSnackBar(
+              context, 'Unable to open dialer for $cleanNumber');
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error making call: $e')),
-      );
+      Models.showErrorSnackBar(context, 'Error making call: $e');
     }
   }
 }

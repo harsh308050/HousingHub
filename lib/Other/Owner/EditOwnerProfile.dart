@@ -120,17 +120,13 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Profile photo updated! Save to confirm changes.')),
-        );
+        Models.showInfoSnackBar(
+            context, 'Profile photo updated! Save to confirm changes.');
       }
     } catch (e) {
       if (mounted) {
         setState(() => _uploadingPhoto = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update photo: $e')),
-        );
+        Models.showErrorSnackBar(context, 'Failed to update photo: $e');
       }
     }
   }
@@ -300,7 +296,7 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
         children: [
           Container(
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey),
+              border: Border.all(color: Colors.black54),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(
@@ -317,17 +313,6 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (_stateSearchController.text.isNotEmpty)
-                          IconButton(
-                            icon: Icon(Icons.clear, color: Colors.grey),
-                            onPressed: () {
-                              setState(() {
-                                _stateSearchController.clear();
-                                selectedState = null;
-                                _showStateDropdown = false;
-                              });
-                            },
-                          ),
                         IconButton(
                           icon: Icon(
                             _showStateDropdown
@@ -348,10 +333,6 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
                       ],
                     ),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 14,
-                    ),
                   ),
                   onTap: () {
                     setState(() {
@@ -436,7 +417,7 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
         children: [
           Container(
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey),
+              border: Border.all(color: Colors.black54),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(
@@ -454,17 +435,6 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (_citySearchController.text.isNotEmpty)
-                          IconButton(
-                            icon: Icon(Icons.clear, color: Colors.grey),
-                            onPressed: () {
-                              setState(() {
-                                _citySearchController.clear();
-                                selectedCity = null;
-                                _showCityDropdown = false;
-                              });
-                            },
-                          ),
                         IconButton(
                           icon: Icon(
                             _showCityDropdown
@@ -492,10 +462,6 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
                       ],
                     ),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 14,
-                    ),
                   ),
                   enabled: _cities.isNotEmpty,
                   onTap: () {
@@ -641,12 +607,8 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
 
         // Show success message
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Profile updated successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          Models.showSuccessSnackBar(
+              context, 'Profile updated successfully!');
 
           // Return to profile page
           Navigator.pop(
@@ -655,12 +617,8 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
       } catch (e) {
         // Show error message
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to update profile: ${e.toString()}'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          Models.showErrorSnackBar(
+              context, 'Failed to update profile: ${e.toString()}');
         }
       } finally {
         if (mounted) {
@@ -676,11 +634,27 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: Colors.black54),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.arrow_back_ios_new,
+                  size: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ),
         ),
         title: Text('Edit Profile',
             style:

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Helper/API.dart';
+import 'package:housinghub/Helper/Models.dart';
 import 'package:housinghub/Helper/ShimmerHelper.dart';
 import 'package:housinghub/Other/Tenant/TenantPropertyDetail.dart';
 
@@ -63,14 +64,11 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
         _priceRange = RangeValues(0, maxPrice);
       });
       if (list.isEmpty && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No properties found.')), // dev feedback
-        );
+        Models.showInfoSnackBar(context, 'No properties found.');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to load properties: $e')));
+    Models.showErrorSnackBar(context, 'Failed to load properties: $e');
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -397,7 +395,7 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
-                  Text('${sorted.length} Properties...',
+                  Text('${sorted.length} Properties',
                       style: const TextStyle(
                           fontWeight: FontWeight.w600, fontSize: 15)),
                   const Spacer(),
@@ -419,20 +417,66 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
             Expanded(
               child: _loading
                   ? ShimmerHelper.searchResultsShimmer()
-                  : RefreshIndicator(
-                      onRefresh: _fetchProperties,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                        itemCount: sorted.length,
-                        itemBuilder: (c, i) => _PropertyResultCard(
-                          data: sorted[i],
-                          onTap: () => _openDetail(sorted[i]),
+                  : sorted.isEmpty
+                      ? _buildEmptyState()
+                      : RefreshIndicator(
+                          onRefresh: _fetchProperties,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                            itemCount: sorted.length,
+                            itemBuilder: (c, i) => _PropertyResultCard(
+                              data: sorted[i],
+                              onTap: () => _openDetail(sorted[i]),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
             )
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'No properties found',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Try adjusting your filters or search criteria',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[500],
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _showFiltersSheet,
+            icon: const Icon(
+              Icons.tune,
+              color: Colors.white,
+            ),
+            label: const Text('Adjust Filters'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppConfig.primaryColor,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -458,7 +502,7 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(10),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(.05),
@@ -482,13 +526,16 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
               ),
             ),
           ),
+          SizedBox(
+            width: 5,
+          ),
           GestureDetector(
             onTap: _showFiltersSheet,
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: AppConfig.primaryColor,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(Icons.tune, size: 18, color: Colors.white),
             ),
@@ -688,8 +735,7 @@ class _PropertyResultCardState extends State<_PropertyResultCard> {
     final user = FirebaseAuth.instance.currentUser;
     final id = widget.data['id']?.toString();
     if (user?.email == null || id == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sign in to save properties')));
+    Models.showWarningSnackBar(context, 'Sign in to save properties');
       return;
     }
     final prev = _saved;
@@ -707,8 +753,7 @@ class _PropertyResultCardState extends State<_PropertyResultCard> {
     } catch (e) {
       if (mounted) {
         setState(() => _saved = prev);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Failed: $e')));
+    Models.showErrorSnackBar(context, 'Failed: $e');
       }
     }
   }

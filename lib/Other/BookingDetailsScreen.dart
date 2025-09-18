@@ -6,9 +6,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_saver/file_saver.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:open_filex/open_filex.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Helper/BookingModels.dart';
+import 'package:housinghub/Helper/Models.dart';
 import 'package:housinghub/Helper/PdfReceiptGenerator.dart';
 
 class BookingDetailsScreen extends StatefulWidget {
@@ -47,12 +47,34 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.arrow_back_ios_new,
+                  size: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ),
+        ),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
         title: const Text('Booking Details',
-            style: TextStyle(fontWeight: FontWeight.w600)),
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 20)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -493,8 +515,7 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Unable to open document')));
+        Models.showErrorSnackBar(context, 'Unable to open document');
       }
     }
   }
@@ -527,20 +548,12 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
         final savedPath = await _savePdfToDownloads(bytes, baseName) ?? '';
         if (mounted) {
           final hasPath = savedPath.toString().isNotEmpty;
-          final snackBar = SnackBar(
-            content: Text(hasPath
-                ? 'Receipt saved: $savedPath'
-                : 'Receipt saved to Downloads (regenerated locally)'),
-            action: hasPath
-                ? SnackBarAction(
-                    label: 'Open',
-                    onPressed: () {
-                      OpenFilex.open(savedPath.toString());
-                    },
-                  )
-                : null,
-          );
-          ScaffoldMessenger.of(context).showSnackBar(snackBar);
+          if (hasPath) {
+            Models.showSuccessSnackBar(context, 'Receipt saved: $savedPath');
+          } else {
+            Models.showInfoSnackBar(
+                context, 'Receipt saved to Downloads (regenerated locally)');
+          }
         }
         return;
       }
@@ -551,25 +564,15 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
 
       if (mounted) {
         final hasPath = savedPath.toString().isNotEmpty;
-        final snackBar = SnackBar(
-          content: Text(hasPath
-              ? 'Receipt saved: $savedPath'
-              : 'Receipt saved to Downloads'),
-          action: hasPath
-              ? SnackBarAction(
-                  label: 'Open',
-                  onPressed: () {
-                    OpenFilex.open(savedPath.toString());
-                  },
-                )
-              : null,
-        );
-        ScaffoldMessenger.of(context).showSnackBar(snackBar);
+        if (hasPath) {
+          Models.showSuccessSnackBar(context, 'Receipt saved: $savedPath');
+        } else {
+          Models.showInfoSnackBar(context, 'Receipt saved to Downloads');
+        }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error downloading receipt: $e')));
+        Models.showErrorSnackBar(context, 'Error downloading receipt: $e');
       }
     }
   }
@@ -700,10 +703,10 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
         .trim();
     final phone = _sanitizePhone(raw);
     if (phone.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Owner phone number not available')));
-      }
+  if (mounted) {
+    Models.showWarningSnackBar(
+    context, 'Owner phone number not available');
+  }
       return;
     }
     final uri = Uri(scheme: 'tel', path: phone);
@@ -711,8 +714,7 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Unable to open dialer')));
+        Models.showErrorSnackBar(context, 'Unable to open dialer');
       }
     }
   }
@@ -721,10 +723,10 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
     final raw = (tenant['mobileNumber'] ?? '').toString().trim();
     final phone = _sanitizePhone(raw);
     if (phone.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Tenant phone number not available')));
-      }
+  if (mounted) {
+    Models.showWarningSnackBar(
+    context, 'Tenant phone number not available');
+  }
       return;
     }
     final uri = Uri(scheme: 'tel', path: phone);
@@ -732,8 +734,7 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Unable to open dialer')));
+        Models.showErrorSnackBar(context, 'Unable to open dialer');
       }
     }
   }

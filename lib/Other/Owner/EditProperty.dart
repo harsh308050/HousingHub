@@ -3,6 +3,7 @@ import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:housinghub/Helper/Models.dart';
 
 class EditProperty extends StatefulWidget {
   final Map<String, dynamic> property;
@@ -131,9 +132,8 @@ class _EditPropertyState extends State<EditProperty> {
 
         // Cloudinary free plan has a 10MB limit
         if (fileSizeInMB > 10) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Image ${image.name} exceeds 10MB limit')),
-          );
+          Models.showWarningSnackBar(
+              context, 'Image ${image.name} exceeds 10MB limit');
         } else {
           setState(() {
             _newImages.add(image);
@@ -220,12 +220,10 @@ class _EditPropertyState extends State<EditProperty> {
                 );
 
             // Close loading dialog and show success message
-            Navigator.of(context).pop();
+      Navigator.of(context).pop();
 
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content: Text('Property updated and marked as unavailable')),
-            );
+      Models.showSuccessSnackBar(
+        context, 'Property updated and marked as unavailable');
 
             // Go back to property list
             Navigator.of(context)
@@ -239,12 +237,10 @@ class _EditPropertyState extends State<EditProperty> {
                 );
 
             // Close loading dialog and show success message
-            Navigator.of(context).pop();
+      Navigator.of(context).pop();
 
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content: Text('Property updated and marked as available')),
-            );
+      Models.showSuccessSnackBar(
+        context, 'Property updated and marked as available');
 
             // Go back to property list
             Navigator.of(context)
@@ -263,9 +259,7 @@ class _EditPropertyState extends State<EditProperty> {
           // Close loading dialog and show success message
           Navigator.of(context).pop();
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Property updated successfully')),
-          );
+          Models.showSuccessSnackBar(context, 'Property updated successfully');
 
           // Go back to property list
           Navigator.of(context)
@@ -277,9 +271,8 @@ class _EditPropertyState extends State<EditProperty> {
           Navigator.of(context).pop();
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating property: ${e.toString()}')),
-        );
+        Models.showErrorSnackBar(
+            context, 'Error updating property: ${e.toString()}');
       }
     }
   }
@@ -351,9 +344,8 @@ class _EditPropertyState extends State<EditProperty> {
 
       // Show success message
       if (mounted) {
-        ScaffoldMessenger.of(currentContext).showSnackBar(
-          SnackBar(content: Text('Property deleted successfully')),
-        );
+        Models.showSuccessSnackBar(
+            currentContext, 'Property deleted successfully');
 
         // Return to property list safely
         Navigator.of(currentContext)
@@ -368,9 +360,8 @@ class _EditPropertyState extends State<EditProperty> {
 
       // Show error message if the widget is still mounted
       if (mounted) {
-        ScaffoldMessenger.of(currentContext).showSnackBar(
-          SnackBar(content: Text('Error deleting property: ${e.toString()}')),
-        );
+        Models.showErrorSnackBar(
+            currentContext, 'Error deleting property: ${e.toString()}');
       }
     }
   }
@@ -381,9 +372,27 @@ class _EditPropertyState extends State<EditProperty> {
       appBar: AppBar(
         centerTitle: true,
         title: Text('Edit Property'),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios),
-          onPressed: () => Navigator.of(context).pop(),
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.arrow_back_ios_new,
+                  size: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
       body: Form(

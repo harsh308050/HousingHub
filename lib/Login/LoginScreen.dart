@@ -417,10 +417,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // Success message
         if (currentUser != null && currentUser.emailVerified) {
-          Models.showSuccessSnackBar(context,
-              'Profile completed! Please submit your ID for approval.');
-          // Owners must go to approval screen until approved
-          Navigator.pushReplacementNamed(context, 'OwnerApprovalScreen');
+          Navigator.pushReplacementNamed(context, 'TenantHomeScreen');
         } else {
           Models.showSuccessSnackBar(context,
               'Registration successful! Please check your email to verify your account.');

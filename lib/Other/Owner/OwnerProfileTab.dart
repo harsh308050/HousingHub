@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:housinghub/Helper/Models.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -78,17 +79,13 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
         await _fetchOwnerData();
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Profile photo updated successfully!')),
-          );
+          Models.showSuccessSnackBar(
+              context, 'Profile photo updated successfully!');
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update photo: $e')),
-        );
+        Models.showErrorSnackBar(context, 'Failed to update photo: $e');
       }
     } finally {
       if (mounted) setState(() => _uploadingPhoto = false);
@@ -580,11 +577,27 @@ class Privacy extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: Colors.black54),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.arrow_back_ios_new,
+                  size: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ),
         ),
         title: Text('Privacy Policy', style: TextStyle(color: Colors.black87)),
         centerTitle: true,
@@ -834,11 +847,27 @@ class About extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: Colors.black54),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.arrow_back_ios_new,
+                  size: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ),
         ),
         title: Text('About', style: TextStyle(color: Colors.black87)),
         centerTitle: true,
@@ -1101,11 +1130,27 @@ class _HelpState extends State<Help> {
   Widget build(BuildContext context) {
     return Scaffold(
         appBar: AppBar(
-          leading: IconButton(
-            icon: Icon(Icons.arrow_back_ios, color: Colors.black54),
-            onPressed: () {
-              Navigator.pop(context);
-            },
+          leading: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Center(
+                  child: Icon(
+                    Icons.arrow_back_ios_new,
+                    size: 16,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+            ),
           ),
           title:
               Text('Help & Support', style: TextStyle(color: Colors.black87)),
@@ -1348,20 +1393,10 @@ class _HelpState extends State<Help> {
       if (await canLaunchUrl(emailLaunchUri)) {
         await launchUrl(emailLaunchUri);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Could not open email client."),
-            backgroundColor: Colors.red,
-          ),
-        );
+        Models.showErrorSnackBar(context, 'Could not open email client.');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Could not open email client."),
-          backgroundColor: Colors.red,
-        ),
-      );
+      Models.showErrorSnackBar(context, 'Could not open email client.');
     }
   }
 

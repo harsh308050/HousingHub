@@ -8,6 +8,7 @@ import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/Helper/BookingModels.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:housinghub/Other/Chat/ChatScreen.dart';
+import 'package:housinghub/Helper/Models.dart';
 
 class OwnerBookingsScreen extends StatefulWidget {
   const OwnerBookingsScreen({Key? key}) : super(key: key);
@@ -42,16 +43,37 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Owner Bookings')),
+        appBar: AppBar(
+            title: const Text(
+          'Bookings',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        )),
         body: _buildSignInPrompt(),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Owner Bookings'),
+        centerTitle: true,
+        title: const Text(
+          'Bookings',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
         bottom: TabBar(
           controller: _tabController,
+          labelColor: AppConfig.primaryColor,
+          unselectedLabelColor: Colors.grey[600],
+          indicatorColor: AppConfig.primaryColor,
+          indicatorWeight: 3,
+          indicatorSize: TabBarIndicatorSize.tab,
           tabs: const [
             Tab(text: 'Pending'),
             Tab(text: 'Active'),
@@ -800,21 +822,12 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
         );
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Booking approved successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          Models.showSuccessSnackBar(
+              context, 'Booking approved successfully!');
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error approving booking: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          Models.showErrorSnackBar(context, 'Error approving booking: $e');
         }
       }
     }
@@ -851,21 +864,11 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
         );
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Booking rejected'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          Models.showInfoSnackBar(context, 'Booking rejected');
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error rejecting booking: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          Models.showErrorSnackBar(context, 'Error rejecting booking: $e');
         }
       }
     }
@@ -875,17 +878,30 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Mark Booking Complete'),
+        title: const Text(
+          'Mark Booking Complete',
+          style: TextStyle(color: AppConfig.primaryColor),
+        ),
         content: const Text(
-            'Mark this booking as completed? This action cannot be undone.'),
+            'Mark this booking as completed? \nThis action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppConfig.primaryColor),
+            ),
+          ),
+          SizedBox(
+            width: 10,
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppConfig.primaryColor,
+            ),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Mark Complete'),
+            child: const Text('Mark Complete',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -901,21 +917,12 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
         );
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Booking marked as completed!'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          Models.showSuccessSnackBar(
+              context, 'Booking marked as completed!');
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error updating booking: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          Models.showErrorSnackBar(context, 'Error updating booking: $e');
         }
       }
     }
@@ -931,12 +938,8 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
 
     final ownerEmail = FirebaseAuth.instance.currentUser?.email;
     if (tenantEmail == null || tenantEmail.isEmpty || ownerEmail == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to open chat. Missing user information.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      Models.showErrorSnackBar(
+          context, 'Unable to open chat. Missing user information.');
       return;
     }
 
