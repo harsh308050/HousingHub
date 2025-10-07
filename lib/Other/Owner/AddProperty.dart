@@ -72,6 +72,8 @@ class _AddPropertyState extends State<AddProperty> {
     _otherPropertyTypeController.dispose();
     _priceController.dispose();
     _securityDepositController.dispose();
+    _salePriceController.dispose();
+    _propertyAgeController.dispose();
     _searchDebouncer?.cancel();
     super.dispose();
   }
@@ -677,6 +679,23 @@ class _AddPropertyState extends State<AddProperty> {
     '12 Months'
   ];
 
+  // New sale property fields
+  String _listingType = 'rent'; // 'rent' or 'sale'
+  final TextEditingController _salePriceController = TextEditingController();
+  String? _selectedFurnishingStatus;
+  final List<String> _furnishingOptions = [
+    'Furnished',
+    'Semi-Furnished',
+    'Unfurnished'
+  ];
+  final TextEditingController _propertyAgeController = TextEditingController();
+  String? _selectedOwnershipType;
+  final List<String> _ownershipTypes = [
+    'Freehold',
+    'Leasehold',
+    'Co-operative'
+  ];
+
   final Map<String, bool> _amenities = {
     'WiFi': false,
     'Parking': false,
@@ -705,9 +724,93 @@ class _AddPropertyState extends State<AddProperty> {
             ),
             SizedBox(height: 24),
 
-            // Price
+            // Listing Type Selection
             Text(
-              'Price',
+              'Listing Type',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[800],
+              ),
+            ),
+            SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey[300]!),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _listingType = 'rent';
+                        });
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: _listingType == 'rent'
+                              ? AppConfig.primaryColor
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(12),
+                            bottomLeft: Radius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'For Rent',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: _listingType == 'rent'
+                                ? Colors.white
+                                : Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _listingType = 'sale';
+                        });
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: _listingType == 'sale'
+                              ? AppConfig.primaryColor
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'For Sale',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: _listingType == 'sale'
+                                ? Colors.white
+                                : Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 24),
+
+            // Price (conditional based on listing type)
+            Text(
+              _listingType == 'rent' ? 'Monthly Rent' : 'Sale Price',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
@@ -716,11 +819,15 @@ class _AddPropertyState extends State<AddProperty> {
             ),
             SizedBox(height: 8),
             TextFormField(
-              controller: _priceController,
+              controller: _listingType == 'rent'
+                  ? _priceController
+                  : _salePriceController,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                hintText: 'Enter price',
-                suffixText: '₹/month',
+                hintText: _listingType == 'rent'
+                    ? 'Enter monthly rent'
+                    : 'Enter sale price',
+                suffixText: _listingType == 'rent' ? '₹/month' : '₹',
                 filled: true,
                 fillColor: Colors.grey[50],
                 border: OutlineInputBorder(
@@ -738,7 +845,9 @@ class _AddPropertyState extends State<AddProperty> {
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'Please enter price';
+                  return _listingType == 'rent'
+                      ? 'Please enter monthly rent'
+                      : 'Please enter sale price';
                 }
                 if (int.tryParse(value) == null) {
                   return 'Please enter a valid number';
@@ -748,97 +857,244 @@ class _AddPropertyState extends State<AddProperty> {
             ),
             SizedBox(height: 24),
 
-            // Security Deposit
-            Text(
-              'Security Deposit',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[800],
-              ),
-            ),
-            SizedBox(height: 8),
-            TextFormField(
-              controller: _securityDepositController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                hintText: 'Enter security deposit',
-                suffixText: '₹',
-                filled: true,
-                fillColor: Colors.grey[50],
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: AppConfig.primaryColor),
+            // Conditional fields based on listing type
+            if (_listingType == 'rent') ...[
+              // Security Deposit (only for rent)
+              Text(
+                'Security Deposit',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[800],
                 ),
               ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter security deposit';
-                }
-                if (int.tryParse(value) == null) {
-                  return 'Please enter a valid number';
-                }
-                return null;
-              },
-            ),
-            SizedBox(height: 24),
+              SizedBox(height: 8),
+              TextFormField(
+                controller: _securityDepositController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  hintText: 'Enter security deposit',
+                  suffixText: '₹',
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AppConfig.primaryColor),
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter security deposit';
+                  }
+                  if (int.tryParse(value) == null) {
+                    return 'Please enter a valid number';
+                  }
+                  return null;
+                },
+              ),
+              SizedBox(height: 24),
 
-            // Minimum Booking Period
-            Text(
-              'Minimum Booking Period',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[800],
-              ),
-            ),
-            SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              value: _selectedMinimumBookingPeriod,
-              decoration: InputDecoration(
-                hintText: 'Select minimum booking period',
-                filled: true,
-                fillColor: Colors.grey[50],
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: AppConfig.primaryColor),
+              // Minimum Booking Period (only for rent)
+              Text(
+                'Minimum Booking Period',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[800],
                 ),
               ),
-              items: _bookingPeriods.map((String period) {
-                return DropdownMenuItem(
-                  value: period,
-                  child: Text(period),
-                );
-              }).toList(),
-              onChanged: (String? newValue) {
-                setState(() {
-                  _selectedMinimumBookingPeriod = newValue;
-                });
-              },
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please select minimum booking period';
-                }
-                return null;
-              },
-            ),
-            SizedBox(height: 24),
+              SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _selectedMinimumBookingPeriod,
+                decoration: InputDecoration(
+                  hintText: 'Select minimum booking period',
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AppConfig.primaryColor),
+                  ),
+                ),
+                items: _bookingPeriods.map((String period) {
+                  return DropdownMenuItem(
+                    value: period,
+                    child: Text(period),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _selectedMinimumBookingPeriod = newValue;
+                  });
+                },
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please select minimum booking period';
+                  }
+                  return null;
+                },
+              ),
+              SizedBox(height: 24),
+            ],
+
+            // Sale-specific fields
+            if (_listingType == 'sale') ...[
+              // Furnishing Status
+              Text(
+                'Furnishing Status',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[800],
+                ),
+              ),
+              SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _selectedFurnishingStatus,
+                decoration: InputDecoration(
+                  hintText: 'Select furnishing status',
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AppConfig.primaryColor),
+                  ),
+                ),
+                items: _furnishingOptions.map((String option) {
+                  return DropdownMenuItem(
+                    value: option,
+                    child: Text(option),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _selectedFurnishingStatus = newValue;
+                  });
+                },
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please select furnishing status';
+                  }
+                  return null;
+                },
+              ),
+              SizedBox(height: 24),
+
+              // Property Age
+              Text(
+                'Property Age',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[800],
+                ),
+              ),
+              SizedBox(height: 8),
+              TextFormField(
+                controller: _propertyAgeController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  hintText: 'Enter property age',
+                  suffixText: 'years',
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AppConfig.primaryColor),
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter property age';
+                  }
+                  if (int.tryParse(value) == null) {
+                    return 'Please enter a valid number';
+                  }
+                  return null;
+                },
+              ),
+              SizedBox(height: 24),
+
+              // Ownership Type
+              Text(
+                'Ownership Type',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[800],
+                ),
+              ),
+              SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _selectedOwnershipType,
+                decoration: InputDecoration(
+                  hintText: 'Select ownership type',
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AppConfig.primaryColor),
+                  ),
+                ),
+                items: _ownershipTypes.map((String type) {
+                  return DropdownMenuItem(
+                    value: type,
+                    child: Text(type),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _selectedOwnershipType = newValue;
+                  });
+                },
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please select ownership type';
+                  }
+                  return null;
+                },
+              ),
+              SizedBox(height: 24),
+            ],
 
             // Gender Allowed
             Text(
@@ -1423,9 +1679,6 @@ class _AddPropertyState extends State<AddProperty> {
           'bedrooms': _bedrooms,
           'bathrooms': _bathrooms,
           'squareFootage': int.parse(_squareFootageController.text),
-          'price': int.parse(_priceController.text),
-          'securityDeposit': int.parse(_securityDepositController.text),
-          'minimumBookingPeriod': _selectedMinimumBookingPeriod,
           'address': _addressController.text,
           'city': _cityController.text,
           'state': _stateController.text,
@@ -1439,7 +1692,30 @@ class _AddPropertyState extends State<AddProperty> {
               .where((entry) => entry.value)
               .map((entry) => entry.key)
               .toList(),
+          // New sale/rent distinction fields
+          'listingType': _listingType,
         };
+
+        // Add listing-type specific fields
+        if (_listingType == 'rent') {
+          propertyData.addAll({
+            'price': int.parse(_priceController.text),
+            'securityDeposit': _securityDepositController.text.isNotEmpty
+                ? int.parse(_securityDepositController.text)
+                : 0,
+            'minimumBookingPeriod': _selectedMinimumBookingPeriod,
+          });
+        } else {
+          // Sale properties
+          propertyData.addAll({
+            'salePrice': int.parse(_salePriceController.text),
+            'furnishingStatus': _selectedFurnishingStatus,
+            'propertyAge': _propertyAgeController.text.isNotEmpty
+                ? int.parse(_propertyAgeController.text)
+                : 0,
+            'ownershipType': _selectedOwnershipType,
+          });
+        }
 
         print('Property data map created');
 

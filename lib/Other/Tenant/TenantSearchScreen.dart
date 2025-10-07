@@ -24,6 +24,9 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
   double _maxPriceFound = 20000;
   // Availability: default to available-only, user can include unavailable
   bool _includeUnavailable = false;
+  // Listing type filter
+  String _listingTypeFilter =
+      'all'; // 'rent', 'sale', or 'all' - default to show all properties
 
   final Map<String, List<String>> _filterOptions = {
     'gender': ['Male Only', 'Female Only', 'Both'],
@@ -68,7 +71,7 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
       }
     } catch (e) {
       if (mounted) {
-    Models.showErrorSnackBar(context, 'Failed to load properties: $e');
+        Models.showErrorSnackBar(context, 'Failed to load properties: $e');
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -86,6 +89,12 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
   List<Map<String, dynamic>> get _filtered {
     final q = _searchCtrl.text.trim().toLowerCase();
     return _all.where((p) {
+      // Listing type filter (rent/sale/all)
+      if (_listingTypeFilter != 'all') {
+        final listingType = p['listingType'] ?? 'rent';
+        if (listingType != _listingTypeFilter) return false;
+      }
+
       // Availability filter: by default show only available
       if (!_includeUnavailable) {
         if (p['isAvailable'] != true) return false;
@@ -239,6 +248,115 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
                   ],
                 ),
                 const SizedBox(height: 24),
+
+                // Listing Type Toggle
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.home,
+                            size: 18, color: Color(0xFF007BFF)),
+                        const SizedBox(width: 8),
+                        const Text('Listing Type',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(25),
+                        color: Colors.grey[100],
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () =>
+                                  setM(() => _listingTypeFilter = 'all'),
+                              child: Container(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(25),
+                                  color: _listingTypeFilter == 'all'
+                                      ? const Color(0xFF007BFF)
+                                      : Colors.transparent,
+                                ),
+                                child: Text(
+                                  'All',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: _listingTypeFilter == 'all'
+                                        ? Colors.white
+                                        : Colors.grey[600],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () =>
+                                  setM(() => _listingTypeFilter = 'rent'),
+                              child: Container(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(25),
+                                  color: _listingTypeFilter == 'rent'
+                                      ? const Color(0xFF007BFF)
+                                      : Colors.transparent,
+                                ),
+                                child: Text(
+                                  'For Rent',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: _listingTypeFilter == 'rent'
+                                        ? Colors.white
+                                        : Colors.grey[600],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () =>
+                                  setM(() => _listingTypeFilter = 'sale'),
+                              child: Container(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(25),
+                                  color: _listingTypeFilter == 'sale'
+                                      ? const Color(0xFF007BFF)
+                                      : Colors.transparent,
+                                ),
+                                child: Text(
+                                  'For Sale',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: _listingTypeFilter == 'sale'
+                                        ? Colors.white
+                                        : Colors.grey[600],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
                 // Availability toggle
                 Align(
                   alignment: Alignment.centerLeft,
@@ -278,8 +396,8 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
                   min: 0,
                   max: _maxPriceFound,
                   divisions: 20,
-                  labels: RangeLabels('₹${_priceRange.start.round()}',
-                      '₹${_priceRange.end.round()}'),
+                  labels: RangeLabels('₹${Models.formatIndianCurrency(_priceRange.start.round())}',
+                      '₹${Models.formatIndianCurrency(_priceRange.end.round())}'),
                   onChanged: (v) => setM(() => _priceRange = v),
                 ),
                 const SizedBox(height: 8),
@@ -735,7 +853,7 @@ class _PropertyResultCardState extends State<_PropertyResultCard> {
     final user = FirebaseAuth.instance.currentUser;
     final id = widget.data['id']?.toString();
     if (user?.email == null || id == null) {
-    Models.showWarningSnackBar(context, 'Sign in to save properties');
+      Models.showWarningSnackBar(context, 'Sign in to save properties');
       return;
     }
     final prev = _saved;
@@ -753,7 +871,7 @@ class _PropertyResultCardState extends State<_PropertyResultCard> {
     } catch (e) {
       if (mounted) {
         setState(() => _saved = prev);
-    Models.showErrorSnackBar(context, 'Failed: $e');
+        Models.showErrorSnackBar(context, 'Failed: $e');
       }
     }
   }
@@ -779,7 +897,8 @@ class _PropertyResultCardState extends State<_PropertyResultCard> {
         children: const [
           Icon(Icons.info_outline, size: 14, color: Colors.grey),
           SizedBox(width: 4),
-          Text('No amenities listed', style: TextStyle(fontSize: 11, color: Colors.grey))
+          Text('No amenities listed',
+              style: TextStyle(fontSize: 11, color: Colors.grey))
         ],
       );
     }
@@ -824,7 +943,7 @@ class _PropertyResultCardState extends State<_PropertyResultCard> {
       if (i > 0) {
         amenityWidgets.add(const SizedBox(width: 14));
       }
-      
+
       final amenity = visibleAmenities[i];
       amenityWidgets.add(
         Row(
@@ -875,8 +994,13 @@ class _PropertyResultCardState extends State<_PropertyResultCard> {
     final image = (data['images'] is List && data['images'].isNotEmpty)
         ? data['images'][0]
         : 'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg';
-    final priceNum = _parsePrice(data['price']);
-    final priceStr = '₹${priceNum.toStringAsFixed(0)}';
+    // Handle price based on listing type
+    final listingType = data['listingType'] ?? 'rent';
+    final priceNum = listingType == 'sale'
+        ? _parsePrice(data['salePrice'] ?? data['price'])
+        : _parsePrice(data['price']);
+    final priceStr =
+        '₹${Models.formatIndianCurrency(priceNum.toStringAsFixed(0))}';
     // Ratings removed
     final isNew = data['createdAt'] is Timestamp
         ? DateTime.now()
@@ -1047,9 +1171,11 @@ class _PropertyResultCardState extends State<_PropertyResultCard> {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Text('/month',
-                          style:
-                              TextStyle(fontSize: 12, color: Colors.black54)),
+                      Text(
+                        listingType == 'sale' ? '' : '/month',
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.black54),
+                      ),
                       const Spacer(),
                       if (distance != null && distance.isNotEmpty)
                         Padding(

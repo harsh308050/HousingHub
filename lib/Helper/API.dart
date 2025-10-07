@@ -40,6 +40,12 @@ class Property {
   final DateTime? createdAt;
   final int? securityDeposit;
   final String? minimumBookingPeriod;
+  // New fields for sell properties extension
+  final String listingType; // "rent" or "sale"
+  final String? salePrice; // for sale properties
+  final String? furnishingStatus; // "Furnished", "Semi-Furnished", "Unfurnished"
+  final int? propertyAge; // in years
+  final String? ownershipType; // "Freehold", "Leasehold", "Co-operative"
 
   Property({
     required this.id,
@@ -69,6 +75,11 @@ class Property {
     this.createdAt,
     this.securityDeposit,
     this.minimumBookingPeriod,
+    this.listingType = "rent", // default to rent for backward compatibility
+    this.salePrice,
+    this.furnishingStatus,
+    this.propertyAge,
+    this.ownershipType,
   });
 
   // Get primary image URL (first in list or default)
@@ -174,6 +185,14 @@ class Property {
           ? (data['securityDeposit'] as num).toInt()
           : null,
       minimumBookingPeriod: data['minimumBookingPeriod'] as String?,
+      // New sale-related fields with defaults for backward compatibility
+      listingType: data['listingType']?.toString() ?? 'rent',
+      salePrice: data['salePrice']?.toString(),
+      furnishingStatus: data['furnishingStatus']?.toString(),
+      propertyAge: data['propertyAge'] is num
+          ? (data['propertyAge'] as num).toInt()
+          : null,
+      ownershipType: data['ownershipType']?.toString(),
     );
   }
 
@@ -210,6 +229,12 @@ class Property {
       'createdAt': createdAt?.toIso8601String(), // Convert DateTime to string
       'securityDeposit': securityDeposit,
       'minimumBookingPeriod': minimumBookingPeriod,
+      // New sale-related fields
+      'listingType': listingType,
+      'salePrice': salePrice,
+      'furnishingStatus': furnishingStatus,
+      'propertyAge': propertyAge,
+      'ownershipType': ownershipType,
     };
   }
 }
@@ -1686,7 +1711,8 @@ class Api {
   }
 
   // Get properties near a specific city
-  static Future<List<Property>> getPropertiesByCity(String city) async {
+  static Future<List<Property>> getPropertiesByCity(String city,
+      {String? listingType}) async {
     if (city == 'Loading...' ||
         city == 'Select City' ||
         city == 'Unknown City') {
@@ -1728,6 +1754,12 @@ class Api {
               String currentCity = city.trim().toLowerCase();
 
               if (propertyCity.isNotEmpty && propertyCity == currentCity) {
+                // Apply listing type filter if specified
+                if (listingType != null && listingType != 'all') {
+                  String propertyListingType = data['listingType']?.toString() ?? 'rent';
+                  if (propertyListingType != listingType) continue;
+                }
+                
                 // Create property object with owner ID
                 Property property =
                     Property.fromFirestore(propertyDoc, ownerEmail);

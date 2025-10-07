@@ -156,7 +156,7 @@ class _OwnerPropertyPreviewState extends State<OwnerPropertyPreview>
     final femaleAllowed = widget.propertyData['femaleAllowed'] ?? false;
     final maleAllowed = widget.propertyData['maleAllowed'] ?? false;
     final propertyTitle = widget.propertyData['title'] ?? 'Property Details';
-    final formattedPrice = '₹${widget.propertyData['price'] ?? 'N/A'}';
+    final formattedPrice = _buildPriceText(widget.propertyData);
     final address = widget.propertyData['address'] ?? 'Address not specified';
     final city = widget.propertyData['city'] ?? 'City not specified';
     final state = widget.propertyData['state'] ?? 'State not specified';
@@ -414,12 +414,25 @@ class _OwnerPropertyPreviewState extends State<OwnerPropertyPreview>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        '$formattedPrice/month',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            formattedPrice,
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if ((widget.propertyData['listingType'] ?? 'rent') == 'rent')
+                            Text(
+                              '/month',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                        ],
                       ),
                       // Availability status badge
                       Container(
@@ -638,13 +651,24 @@ class _OwnerPropertyPreviewState extends State<OwnerPropertyPreview>
         _buildDetailRow('Bedrooms', bedrooms),
         _buildDetailRow('Bathrooms', bathrooms),
         _buildDetailRow('Square Footage', '$squareFootage sq.ft'),
-        _buildDetailRow(
-            'Security Deposit',
-            widget.propertyData['securityDeposit'] != null
-                ? '₹${widget.propertyData['securityDeposit']}'
-                : 'Not specified'),
-        _buildDetailRow('Minimum Booking Period',
-            widget.propertyData['minimumBookingPeriod'] ?? 'Not specified'),
+        
+        // Conditional fields based on listing type
+        if ((widget.propertyData['listingType'] ?? 'rent') == 'sale') ...[
+          _buildDetailRow('Furnishing Status', 
+              widget.propertyData['furnishingStatus'] ?? 'Not specified'),
+          _buildDetailRow('Property Age', 
+              widget.propertyData['propertyAge']?.toString() ?? 'Not specified'),
+          _buildDetailRow('Ownership Type', 
+              widget.propertyData['ownershipType'] ?? 'Not specified'),
+        ] else ...[
+          _buildDetailRow(
+              'Security Deposit',
+              widget.propertyData['securityDeposit'] != null
+                  ? '₹${widget.propertyData['securityDeposit']}'
+                  : 'Not specified'),
+          _buildDetailRow('Minimum Booking Period',
+              widget.propertyData['minimumBookingPeriod'] ?? 'Not specified'),
+        ],
       ],
     );
   }
@@ -959,11 +983,28 @@ class _OwnerPropertyPreviewState extends State<OwnerPropertyPreview>
     }
   }
 
+  // Build price text based on listing type
+  String _buildPriceText(Map<String, dynamic> propertyData) {
+    final listingType = propertyData['listingType'] ?? 'rent';
+    
+    if (listingType == 'sale') {
+      final salePrice = propertyData['salePrice'] ?? propertyData['price'] ?? 'N/A';
+      if (salePrice == 'N/A') return '₹N/A';
+      String priceValue = salePrice.toString().replaceAll('₹', '').replaceAll(',', '').trim();
+      return '₹${Models.formatIndianCurrency(priceValue)}';
+    } else {
+      final rentPrice = propertyData['price'] ?? 'N/A';
+      if (rentPrice == 'N/A') return '₹N/A';
+      String priceValue = rentPrice.toString().replaceAll('₹', '').replaceAll(',', '').trim();
+      return '₹${Models.formatIndianCurrency(priceValue)}';
+    }
+  }
+
   // Share property with Google Maps link
   Future<void> _shareProperty() async {
     try {
       final title = widget.propertyData['title'] ?? 'Property';
-      final price = widget.propertyData['price'] ?? '';
+      final formattedPrice = _buildPriceText(widget.propertyData);
       final address = widget.propertyData['address'] ?? '';
       final lat = widget.propertyData['latitude'];
       final lng = widget.propertyData['longitude'];
@@ -982,8 +1023,10 @@ class _OwnerPropertyPreviewState extends State<OwnerPropertyPreview>
               'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude';
         }
       }
+      final listingType = widget.propertyData['listingType'] ?? 'rent';
+      final priceText = listingType == 'sale' ? formattedPrice : '$formattedPrice/month';
       final shareText = [
-        '$title • ₹$price/month',
+        '$title • $priceText',
         address,
         if (mapsUrl != null) ...['', 'View on Google Maps:', mapsUrl],
       ].join('\n');

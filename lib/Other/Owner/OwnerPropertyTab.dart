@@ -63,6 +63,21 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
     }
   }
 
+  // Build price text based on listing type
+  String _buildPriceText(Map<String, dynamic> property) {
+    final listingType = property['listingType'] ?? 'rent';
+    
+    if (listingType == 'sale') {
+      final salePrice = property['salePrice'] ?? property['price'] ?? '0';
+      String priceValue = salePrice.toString().replaceAll('₹', '').replaceAll(',', '').trim();
+      return '₹${Models.formatIndianCurrency(priceValue)}';
+    } else {
+      final rentPrice = property['price'] ?? '0';
+      String priceValue = rentPrice.toString().replaceAll('₹', '').replaceAll(',', '').trim();
+      return '₹${Models.formatIndianCurrency(priceValue)}';
+    }
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -380,20 +395,21 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          '₹${property['price']?.toString() ?? '0'}',
+                          _buildPriceText(property),
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                             color: AppConfig.primaryColor,
                           ),
                         ),
-                        Text(
-                          '/month',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+                        if ((property['listingType'] ?? 'rent') == 'rent')
+                          Text(
+                            '/month',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ],

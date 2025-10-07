@@ -30,12 +30,21 @@ class _EditPropertyState extends State<EditProperty> {
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _stateController = TextEditingController();
   final TextEditingController _pincodeController = TextEditingController();
+  
+  // Sale-specific controllers
+  final TextEditingController _salePriceController = TextEditingController();
 
   // Property details
   String _propertyType = 'Apartment';
   int _bedrooms = 1;
   int _bathrooms = 1;
   String _roomType = '1BHK';
+  
+  // Sale-specific fields
+  String _listingType = 'rent';
+  String _furnishingStatus = 'Furnished';
+  int _propertyAge = 1;
+  String _ownershipType = 'Freehold';
 
   // Amenities map
   Map<String, bool> _amenities = {
@@ -118,7 +127,16 @@ class _EditPropertyState extends State<EditProperty> {
       if (property['images'] != null && property['images'] is List) {
         _existingImages = List<String>.from(property['images']);
       }
+      
+      // Load sale-specific fields
+      _listingType = property['listingType']?.toString() ?? 'rent';
+      _furnishingStatus = property['furnishingStatus']?.toString() ?? 'Furnished';
+      _propertyAge = property['propertyAge'] ?? 1;
+      _ownershipType = property['ownershipType']?.toString() ?? 'Freehold';
     });
+    
+    // Load sale price
+    _salePriceController.text = property['salePrice']?.toString() ?? '';
   }
 
   Future<void> _pickImages() async {
@@ -199,6 +217,15 @@ class _EditPropertyState extends State<EditProperty> {
           'images': _existingImages, // Keep existing images
           'keepExistingImages':
               true, // Flag to indicate we want to keep existing images
+          
+          // Sale-specific fields
+          'listingType': _listingType,
+          'salePrice': _listingType == 'sale' 
+              ? (int.tryParse(_salePriceController.text) ?? 0) 
+              : null,
+          'furnishingStatus': _listingType == 'sale' ? _furnishingStatus : null,
+          'propertyAge': _listingType == 'sale' ? _propertyAge : null,
+          'ownershipType': _listingType == 'sale' ? _ownershipType : null,
         };
 
         // Convert new images to File objects
@@ -438,8 +465,72 @@ class _EditPropertyState extends State<EditProperty> {
                     ),
                     SizedBox(height: 24),
 
-                    // Price
-                    _buildSectionHeader('Price'),
+                    // Listing Type Toggle
+                    _buildSectionHeader('Listing Type'),
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(25),
+                        color: Colors.grey[100],
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setState(() => _listingType = 'rent'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(25),
+                                  color: _listingType == 'rent' 
+                                    ? AppConfig.primaryColor 
+                                    : Colors.transparent,
+                                ),
+                                child: Text('For Rent',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: _listingType == 'rent' 
+                                      ? Colors.white 
+                                      : Colors.grey[600],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setState(() => _listingType = 'sale'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(25),
+                                  color: _listingType == 'sale' 
+                                    ? AppConfig.primaryColor 
+                                    : Colors.transparent,
+                                ),
+                                child: Text('For Sale',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: _listingType == 'sale' 
+                                      ? Colors.white 
+                                      : Colors.grey[600],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 24),
+
+                    // Price (conditional based on listing type)
+                    if (_listingType == 'rent') ...[
+                      _buildSectionHeader('Monthly Rent'),
+                    ] else ...[
+                      _buildSectionHeader('Sale Price'),
+                    ],
                     Row(
                       children: [
                         Container(
@@ -456,7 +547,7 @@ class _EditPropertyState extends State<EditProperty> {
                         ),
                         Expanded(
                           child: TextFormField(
-                            controller: _priceController,
+                            controller: _listingType == 'rent' ? _priceController : _salePriceController,
                             decoration: InputDecoration(
                               filled: true,
                               fillColor: Colors.grey[50],
@@ -489,14 +580,109 @@ class _EditPropertyState extends State<EditProperty> {
                             },
                           ),
                         ),
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          height: 60,
-                          alignment: Alignment.center,
-                          child: Text('/month'),
-                        ),
+                        if (_listingType == 'rent')
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            height: 60,
+                            alignment: Alignment.center,
+                            child: Text('/month'),
+                          ),
                       ],
                     ),
+                    
+                    // Sale-specific fields
+                    if (_listingType == 'sale') ...[
+                      SizedBox(height: 24),
+                      
+                      // Furnishing Status
+                      _buildSectionHeader('Furnishing Status'),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey[300]!),
+                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.grey[50],
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _furnishingStatus,
+                            isExpanded: true,
+                            onChanged: (String? newValue) {
+                              setState(() {
+                                _furnishingStatus = newValue!;
+                              });
+                            },
+                            items: <String>['Furnished', 'Semi-Furnished', 'Unfurnished']
+                                .map<DropdownMenuItem<String>>((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(value),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 24),
+                      
+                      // Property Age
+                      _buildSectionHeader('Property Age (Years)'),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey[300]!),
+                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.grey[50],
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<int>(
+                            value: _propertyAge,
+                            isExpanded: true,
+                            onChanged: (int? newValue) {
+                              setState(() {
+                                _propertyAge = newValue!;
+                              });
+                            },
+                            items: List.generate(31, (index) => index).map<DropdownMenuItem<int>>((int value) {
+                              return DropdownMenuItem<int>(
+                                value: value,
+                                child: Text(value == 0 ? 'New' : value == 30 ? '30+ years' : '$value years'),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 24),
+                      
+                      // Ownership Type
+                      _buildSectionHeader('Ownership Type'),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey[300]!),
+                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.grey[50],
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _ownershipType,
+                            isExpanded: true,
+                            onChanged: (String? newValue) {
+                              setState(() {
+                                _ownershipType = newValue!;
+                              });
+                            },
+                            items: <String>['Freehold', 'Leasehold', 'Co-operative']
+                                .map<DropdownMenuItem<String>>((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(value),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                    ],
+                    
                     SizedBox(height: 24),
 
                     // Location
@@ -1233,6 +1419,7 @@ class _EditPropertyState extends State<EditProperty> {
     _cityController.dispose();
     _stateController.dispose();
     _pincodeController.dispose();
+    _salePriceController.dispose();
     super.dispose();
   }
 }

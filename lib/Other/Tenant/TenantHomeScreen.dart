@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:housinghub/Helper/API.dart';
+import 'package:housinghub/Helper/Models.dart';
 import 'package:housinghub/Helper/ShimmerHelper.dart';
 import 'package:housinghub/Helper/LocationResolver.dart';
 import 'package:housinghub/config/AppConfig.dart';
@@ -358,6 +359,10 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
   bool _loadingProperties = true;
   String? _propertyError;
 
+  // Listing type filter
+  String _listingTypeFilter =
+      'all'; // 'rent', 'sale', or 'all' - default to show all properties
+
   @override
   void initState() {
     super.initState();
@@ -414,9 +419,13 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
     try {
       print('Searching for properties in city: $_currentCity');
 
-      // Fetch properties using API
-      List<Property> properties = await Api.getPropertiesByCity(_currentCity);
-      print('Total properties loaded: ${properties.length}');
+      // Fetch properties using API with listing type filter
+      List<Property> properties = await Api.getPropertiesByCity(
+        _currentCity,
+        listingType: _listingTypeFilter,
+      );
+      print(
+          'Total properties loaded: ${properties.length} (filter: $_listingTypeFilter)');
 
       if (mounted) {
         setState(() {
@@ -934,6 +943,114 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                   ),
                 ],
               ),
+
+              // Listing type filter toggle
+              SizedBox(height: height * 0.015),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[300]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _listingTypeFilter = 'all';
+                          });
+                          _fetchPropertiesNearby();
+                        },
+                        child: Container(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _listingTypeFilter == 'all'
+                                ? AppConfig.primaryColor
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(8),
+                              bottomLeft: Radius.circular(8),
+                            ),
+                          ),
+                          child: Text(
+                            'All',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: _listingTypeFilter == 'all'
+                                  ? Colors.white
+                                  : Colors.grey[700],
+                              fontWeight: FontWeight.w500,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _listingTypeFilter = 'rent';
+                          });
+                          _fetchPropertiesNearby();
+                        },
+                        child: Container(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _listingTypeFilter == 'rent'
+                                ? AppConfig.primaryColor
+                                : Colors.transparent,
+                          ),
+                          child: Text(
+                            'For Rent',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: _listingTypeFilter == 'rent'
+                                  ? Colors.white
+                                  : Colors.grey[700],
+                              fontWeight: FontWeight.w500,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _listingTypeFilter = 'sale';
+                          });
+                          _fetchPropertiesNearby();
+                        },
+                        child: Container(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _listingTypeFilter == 'sale'
+                                ? AppConfig.primaryColor
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.only(
+                              topRight: Radius.circular(8),
+                              bottomRight: Radius.circular(8),
+                            ),
+                          ),
+                          child: Text(
+                            'For Sale',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: _listingTypeFilter == 'sale'
+                                  ? Colors.white
+                                  : Colors.grey[700],
+                              fontWeight: FontWeight.w500,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               SizedBox(height: height * 0.01),
 
               // Properties Near You Row
@@ -984,7 +1101,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                                         color: Colors.grey[400], size: 32),
                                     SizedBox(height: 8),
                                     Text(
-                                      'No properties available in $_currentCity',
+                                      'No properties available',
                                       style: TextStyle(
                                         color: Colors.grey[600],
                                       ),
@@ -1293,7 +1410,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                     children: [
                       Expanded(
                         child: Text(
-                          property.price + " /month",
+                          _buildPriceText(property),
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
@@ -1338,6 +1455,32 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
         ),
       ),
     );
+  }
+
+  // Helper method to build price text based on listing type
+  String _buildPriceText(Property property) {
+    final listingType = property.listingType;
+
+    if (listingType == 'sale') {
+      // For sale properties, show sale price
+      String salePrice = property.salePrice ?? property.price;
+      // Remove ₹ symbol if present to format the number properly
+      String priceValue =
+          salePrice.replaceAll('₹', '').replaceAll(',', '').trim();
+      String formattedPrice = Models.formatIndianCurrency(priceValue);
+      return '₹$formattedPrice';
+    } else {
+      // For rent properties, show monthly rent
+      String price = property.price;
+      // Remove ₹ symbol and /month if present to format the number properly
+      String priceValue = price
+          .replaceAll('₹', '')
+          .replaceAll('/month', '')
+          .replaceAll(',', '')
+          .trim();
+      String formattedPrice = Models.formatIndianCurrency(priceValue);
+      return '₹$formattedPrice/month';
+    }
   }
 
   // Method to preload banner image

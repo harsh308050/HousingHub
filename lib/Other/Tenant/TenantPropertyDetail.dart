@@ -154,15 +154,44 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
   }
 
   void _loadPropertyData() {
+    print('=== Loading Property Data ===');
+    print('Property Data: ${widget.propertyData}');
+    print('Image Path: ${widget.imagePath}');
+    
     // Load images if available
     if (widget.propertyData != null &&
         widget.propertyData!['images'] != null &&
         widget.propertyData!['images'] is List &&
         (widget.propertyData!['images'] as List).isNotEmpty) {
-      roomImages = List<String>.from(widget.propertyData!['images']);
+      List<String> imagesList = List<String>.from(widget.propertyData!['images']);
+      print('Original images list: $imagesList');
+      
+      // Filter out empty or invalid URLs
+      imagesList = imagesList.where((url) => url.isNotEmpty && Uri.tryParse(url) != null).toList();
+      print('Filtered images list: $imagesList');
+      
+      if (imagesList.isNotEmpty) {
+        roomImages = imagesList;
+        print('Using property images: $roomImages');
+      }
     } else if (widget.imagePath != null && widget.imagePath!.isNotEmpty) {
       roomImages = [widget.imagePath!];
+      print('Using widget imagePath: $roomImages');
     }
+    
+    // Ensure we always have at least default images as fallback
+    if (roomImages.isEmpty) {
+      roomImages = [
+        'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg',
+        'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg',
+        'https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg',
+        'https://images.pexels.com/photos/1643383/pexels-photo-1643383.jpeg',
+      ];
+      print('Using fallback images: $roomImages');
+    }
+    
+    print('Final roomImages: $roomImages');
+    print('============================');
 
     // Parse amenities from property data
     if (widget.propertyData != null &&
@@ -293,40 +322,110 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
 
   @override
   Widget build(BuildContext context) {
+    // Debug logging to understand the issue
+    print('=== TenantPropertyDetail Debug ===');
+    print('Property ID: ${widget.propertyId}');
+    print('Property Data Keys: ${widget.propertyData?.keys.toList()}');
+    print('Property Data: ${widget.propertyData}');
+    print('Room Images: $roomImages');
+    print('===================================');
+
+    // Early return with error screen if critical data is missing
+    if (widget.propertyData == null && widget.propertyId == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('Property Details'),
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text(
+                'Property information not found',
+                style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+              ),
+              SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    // Create working data with fallback values
+    final Map<String, dynamic> workingPropertyData = Map<String, dynamic>.from(widget.propertyData ?? {});
+    
+    // If property data is empty or missing critical fields, populate fallback data
+    if (workingPropertyData.isEmpty || !workingPropertyData.containsKey('title')) {
+      print('WARNING: Property data is empty or incomplete, using fallback');
+      workingPropertyData.addAll({
+        'title': workingPropertyData['title'] ?? 'Property Details',
+        'price': workingPropertyData['price'] ?? widget.price ?? 'N/A',
+        'address': workingPropertyData['address'] ?? widget.location ?? 'Address not available',
+        'city': workingPropertyData['city'] ?? 'City not specified',
+        'state': workingPropertyData['state'] ?? 'State not specified',
+        'description': workingPropertyData['description'] ?? 'Property information is being loaded...',
+        'images': workingPropertyData['images'] ?? (roomImages.isNotEmpty ? roomImages : [
+          'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg'
+        ]),
+        'propertyType': workingPropertyData['propertyType'] ?? 'House',
+        'roomType': workingPropertyData['roomType'] ?? 'N/A',
+        'femaleAllowed': workingPropertyData['femaleAllowed'] ?? false,
+        'maleAllowed': workingPropertyData['maleAllowed'] ?? false,
+        'squareFootage': workingPropertyData['squareFootage'] ?? 'Not specified',
+        'bedrooms': workingPropertyData['bedrooms'] ?? 1,
+        'bathrooms': workingPropertyData['bathrooms'] ?? 1,
+        'listingType': workingPropertyData['listingType'] ?? 'rent',
+      });
+    }
+
     final height = MediaQuery.of(context).size.height;
-    final videoUrl =
-        widget.propertyData?['video'] ?? widget.propertyData?['videoUrl'];
+    final videoUrl = workingPropertyData['video'] ?? workingPropertyData['videoUrl'];
 
     // Build combined media list: images + (video placeholder at end if exists)
     final int imageCount = roomImages.length;
     final bool hasVideo = videoUrl != null && videoUrl.toString().isNotEmpty;
     final int totalMediaItems = hasVideo ? imageCount + 1 : imageCount;
-    // Extract property data
-    final propertyType = widget.propertyData?['propertyType'] ?? 'House';
-    final roomType = widget.propertyData?['roomType'] ?? 'N/A';
-    final femaleAllowed = widget.propertyData?['femaleAllowed'] ?? false;
-    final maleAllowed = widget.propertyData?['maleAllowed'] ?? false;
-    final propertyTitle = widget.propertyData?['title'] ?? 'Property Details';
-    final formattedPrice =
-        '${widget.propertyData?['price'] ?? widget.price ?? 'N/A'}';
-    final address = widget.propertyData?['address'] ??
+    
+    // Extract property data from working data
+    final propertyType = workingPropertyData['propertyType'] ?? 'House';
+    final roomType = workingPropertyData['roomType'] ?? 'N/A';
+    final femaleAllowed = workingPropertyData['femaleAllowed'] ?? false;
+    final maleAllowed = workingPropertyData['maleAllowed'] ?? false;
+    final propertyTitle = workingPropertyData['title'] ?? 'Property Details';
+    final formattedPrice = _buildPriceText(workingPropertyData);
+    final address = workingPropertyData['address'] ??
         widget.location ??
         'Address not specified';
-    final city = widget.propertyData?['city'] ?? 'City not specified';
-    final state = widget.propertyData?['state'] ?? 'State not specified';
-    final pincode = widget.propertyData?['pincode'] ?? '';
+    final city = workingPropertyData['city'] ?? 'City not specified';
+    final state = workingPropertyData['state'] ?? 'State not specified';
+    final pincode = workingPropertyData['pincode'] ?? '';
     final fullAddress =
         '$address, $city, $state ${pincode.isNotEmpty ? '- $pincode' : ''}';
     final squareFootage =
-        widget.propertyData?['squareFootage']?.toString() ?? 'Not specified';
-    final bedrooms = widget.propertyData?['bedrooms']?.toString() ?? '1';
-    final bathrooms = widget.propertyData?['bathrooms']?.toString() ?? '1';
+        workingPropertyData['squareFootage']?.toString() ?? 'Not specified';
+    final bedrooms = workingPropertyData['bedrooms']?.toString() ?? '1';
+    final bathrooms = workingPropertyData['bathrooms']?.toString() ?? '1';
     final description =
-        widget.propertyData?['description'] ?? 'No description available';
+        workingPropertyData['description'] ?? 'No description available';
 
-    final ownerEmail = widget.propertyData?['ownerEmail'] ?? '';
-    final createdAt = widget.propertyData?['createdAt'] != null
-        ? _formatCreatedAt(widget.propertyData!['createdAt'])
+    // Sale-specific fields  
+    final furnishingStatus = workingPropertyData['furnishingStatus'] ?? 'Not specified';
+    final propertyAge = workingPropertyData['propertyAge'] != null 
+        ? '${workingPropertyData['propertyAge']} years' 
+        : 'Not specified';
+    final ownershipType = workingPropertyData['ownershipType'] ?? 'Not specified';
+
+    final ownerEmail = workingPropertyData['ownerEmail'] ?? '';
+    final createdAt = workingPropertyData['createdAt'] != null
+        ? _formatCreatedAt(workingPropertyData['createdAt'])
         : 'Unknown date';
     return Scaffold(
       appBar: AppBar(
@@ -465,19 +564,61 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                   : Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.network(
-                          roomImages.isNotEmpty &&
-                                  _currentMediaIndex < roomImages.length
-                              ? roomImages[_currentMediaIndex]
-                              : (roomImages.isNotEmpty ? roomImages.first : ''),
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey[300],
-                              child: Center(
-                                child: Icon(Icons.broken_image,
-                                    size: 50, color: Colors.grey[500]),
-                              ),
+                        Builder(
+                          builder: (context) {
+                            // Ensure we always have a valid image URL
+                            String imageUrl = '';
+                            if (roomImages.isNotEmpty && _currentMediaIndex < roomImages.length) {
+                              imageUrl = roomImages[_currentMediaIndex];
+                            } else if (roomImages.isNotEmpty) {
+                              imageUrl = roomImages.first;
+                            }
+                            
+                            // If still empty, use a placeholder
+                            if (imageUrl.isEmpty) {
+                              imageUrl = 'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg';
+                            }
+                            
+                            print('Displaying image: $imageUrl');
+                            
+                            return Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover,
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Container(
+                                  color: Colors.grey[200],
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      value: loadingProgress.expectedTotalBytes != null
+                                          ? loadingProgress.cumulativeBytesLoaded /
+                                              loadingProgress.expectedTotalBytes!
+                                          : null,
+                                    ),
+                                  ),
+                                );
+                              },
+                              errorBuilder: (context, error, stackTrace) {
+                                print('Image load error: $error');
+                                return Container(
+                                  color: Colors.grey[300],
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.broken_image,
+                                          size: 50, color: Colors.grey[500]),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        'Image not available',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
                             );
                           },
                         ),
@@ -591,7 +732,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                   Row(
                     children: [
                       Text(
-                        '$formattedPrice/month',
+                        formattedPrice,
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
@@ -692,7 +833,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
               child: [
                 // About tab
                 _buildAboutTab(description, roomType, propertyType,
-                    squareFootage, bedrooms, bathrooms),
+                    squareFootage, bedrooms, bathrooms, furnishingStatus, propertyAge, ownershipType, workingPropertyData),
 
                 // Amenities tab
                 _buildAmenitiesTab(),
@@ -834,10 +975,16 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                       onPressed: () {
                         if (_isUnavailable) {
                           Models.showWarningSnackBar(context,
-                              'This property is not available for booking.');
+                              'This property is not available.');
                           return;
                         }
-                        _navigateToBooking();
+                        
+                        final listingType = workingPropertyData['listingType'] ?? 'rent';
+                        if (listingType == 'sale') {
+                          _contactOwner();
+                        } else {
+                          _navigateToBooking();
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _isUnavailable
@@ -850,7 +997,11 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                         ),
                       ),
                       child: Text(
-                        _isUnavailable ? 'Not Available' : 'Book Now',
+                        _isUnavailable 
+                          ? 'Not Available' 
+                          : (workingPropertyData['listingType'] ?? 'rent') == 'sale'
+                            ? 'Contact Owner'
+                            : 'Book Now',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -873,7 +1024,11 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
       String propertyType,
       String squareFootage,
       String bedrooms,
-      String bathrooms) {
+      String bathrooms,
+      String furnishingStatus,
+      String propertyAge,
+      String ownershipType,
+      Map<String, dynamic> propertyData) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -911,13 +1066,21 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
         _buildDetailRow('Bedrooms', bedrooms),
         _buildDetailRow('Bathrooms', bathrooms),
         _buildDetailRow('Square Footage', '$squareFootage sq.ft'),
-        _buildDetailRow(
-            'Security Deposit',
-            widget.propertyData?['securityDeposit'] != null
-                ? '₹${widget.propertyData!['securityDeposit']}'
-                : 'Not specified'),
-        _buildDetailRow('Minimum Booking Period',
-            widget.propertyData?['minimumBookingPeriod'] ?? 'Not specified'),
+        
+        // Conditional fields based on listing type
+        if ((propertyData['listingType'] ?? 'rent') == 'sale') ...[
+          _buildDetailRow('Furnishing Status', furnishingStatus),
+          _buildDetailRow('Property Age', propertyAge),
+          _buildDetailRow('Ownership Type', ownershipType),
+        ] else ...[
+          _buildDetailRow(
+              'Security Deposit',
+              propertyData['securityDeposit'] != null
+                  ? '₹${Models.formatIndianCurrency(propertyData['securityDeposit'].toString())}'
+                  : 'Not specified'),
+          _buildDetailRow('Minimum Booking Period',
+              propertyData['minimumBookingPeriod']?.toString() ?? 'Not specified'),
+        ],
       ],
     );
   }
@@ -1232,6 +1395,23 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
     }
   }
 
+  // Build price text based on listing type (rent or sale)
+  String _buildPriceText(Map<String, dynamic> propertyData) {
+    final listingType = propertyData['listingType'] ?? 'rent';
+    
+    if (listingType == 'sale') {
+      final salePrice = propertyData['salePrice'] ?? propertyData['price'] ?? 'N/A';
+      if (salePrice == 'N/A') return '₹N/A';
+      String priceValue = salePrice.toString().replaceAll('₹', '').replaceAll(',', '').trim();
+      return '₹${Models.formatIndianCurrency(priceValue)}';
+    } else {
+      final rentPrice = propertyData['price'] ?? widget.price ?? 'N/A';
+      if (rentPrice == 'N/A') return '₹N/A/month';
+      String priceValue = rentPrice.toString().replaceAll('₹', '').replaceAll('/month', '').replaceAll(',', '').trim();
+      return '₹${Models.formatIndianCurrency(priceValue)}/month';
+    }
+  }
+
   // Share property with Google Maps link
   Future<void> _shareProperty() async {
     try {
@@ -1347,6 +1527,65 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
     } catch (e) {
       if (mounted) {
         Models.showErrorSnackBar(context, 'Error opening booking: $e');
+      }
+    }
+  }
+
+  Future<void> _contactOwner() async {
+    // Validate required property data
+    if (widget.propertyData == null) {
+      Models.showErrorSnackBar(
+          context, 'Property information is incomplete');
+      return;
+    }
+
+    final ownerEmail = widget.propertyData!['ownerEmail']?.toString();
+    if (ownerEmail == null || ownerEmail.isEmpty) {
+      Models.showWarningSnackBar(context, 'Owner email not available');
+      return;
+    }
+
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()),
+      );
+
+      // Fetch owner details from Owners collection
+      final ownerData = await Api.getOwnerDetailsByEmail(ownerEmail);
+      
+      // Hide loading indicator
+      if (mounted) Navigator.pop(context);
+
+      if (ownerData == null) {
+        if (mounted) {
+          Models.showWarningSnackBar(context, 'Owner details not found');
+        }
+        return;
+      }
+
+      final mobileNumber = ownerData['mobileNumber']?.toString();
+      if (mobileNumber == null || mobileNumber.isEmpty) {
+        if (mounted) {
+          Models.showWarningSnackBar(context, 'Owner phone number not available');
+        }
+        return;
+      }
+
+      final Uri phoneUri = Uri(scheme: 'tel', path: mobileNumber);
+      
+      // Use url_launcher to open the dialer
+      await launchUrl(phoneUri);
+    } catch (e) {
+      // Hide loading indicator if still showing
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      
+      if (mounted) {
+        Models.showErrorSnackBar(context, 'Error contacting owner: $e');
       }
     }
   }
