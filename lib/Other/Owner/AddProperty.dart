@@ -1096,88 +1096,90 @@ class _AddPropertyState extends State<AddProperty> {
               SizedBox(height: 24),
             ],
 
-            // Gender Allowed
-            Text(
-              'Gender Allowed',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[800],
+            // Gender Allowed - only show for rental properties
+            if (_listingType == 'rent') ...[
+              Text(
+                'Gender Allowed',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[800],
+                ),
               ),
-            ),
-            SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isMaleAllowed = !_isMaleAllowed;
-                      });
-                    },
-                    child: Container(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: _isMaleAllowed
-                            ? AppConfig.primaryColor.withOpacity(0.1)
-                            : Colors.grey[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _isMaleAllowed = !_isMaleAllowed;
+                        });
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
                           color: _isMaleAllowed
-                              ? AppConfig.primaryColor
-                              : Colors.grey[300]!,
+                              ? AppConfig.primaryColor.withOpacity(0.1)
+                              : Colors.grey[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _isMaleAllowed
+                                ? AppConfig.primaryColor
+                                : Colors.grey[300]!,
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        'Male',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: _isMaleAllowed
-                              ? AppConfig.primaryColor
-                              : Colors.grey[600],
-                          fontWeight: FontWeight.w500,
+                        child: Text(
+                          'Male',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: _isMaleAllowed
+                                ? AppConfig.primaryColor
+                                : Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                SizedBox(width: 16),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isFemaleAllowed = !_isFemaleAllowed;
-                      });
-                    },
-                    child: Container(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: _isFemaleAllowed
-                            ? AppConfig.primaryColor.withOpacity(0.1)
-                            : Colors.grey[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _isFemaleAllowed = !_isFemaleAllowed;
+                        });
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
                           color: _isFemaleAllowed
-                              ? AppConfig.primaryColor
-                              : Colors.grey[300]!,
+                              ? AppConfig.primaryColor.withOpacity(0.1)
+                              : Colors.grey[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _isFemaleAllowed
+                                ? AppConfig.primaryColor
+                                : Colors.grey[300]!,
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        'Female',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: _isFemaleAllowed
-                              ? AppConfig.primaryColor
-                              : Colors.grey[600],
-                          fontWeight: FontWeight.w500,
+                        child: Text(
+                          'Female',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: _isFemaleAllowed
+                                ? AppConfig.primaryColor
+                                : Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            SizedBox(height: 24),
+                ],
+              ),
+              SizedBox(height: 24),
+            ],
 
             // Room Type
             Text(
@@ -1240,7 +1242,14 @@ class _AddPropertyState extends State<AddProperty> {
             Wrap(
               spacing: 12,
               runSpacing: 12,
-              children: _amenities.entries.map((entry) {
+              children: _amenities.entries.where((entry) {
+                // Filter out Furnished and Unfurnished for sale properties
+                if (_listingType == 'sale' && 
+                    (entry.key == 'Furnished' || entry.key == 'Unfurnished')) {
+                  return false;
+                }
+                return true;
+              }).map((entry) {
                 return GestureDetector(
                   onTap: () {
                     setState(() {

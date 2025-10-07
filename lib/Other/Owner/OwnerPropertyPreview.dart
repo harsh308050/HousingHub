@@ -424,7 +424,8 @@ class _OwnerPropertyPreviewState extends State<OwnerPropertyPreview>
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          if ((widget.propertyData['listingType'] ?? 'rent') == 'rent')
+                          if ((widget.propertyData['listingType'] ?? 'rent') ==
+                              'rent')
                             Text(
                               '/month',
                               style: TextStyle(
@@ -565,6 +566,7 @@ class _OwnerPropertyPreviewState extends State<OwnerPropertyPreview>
             // Owner info section (instead of bottom sheet)
             Container(
               margin: EdgeInsets.all(16),
+              width: double.infinity,
               padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -586,7 +588,7 @@ class _OwnerPropertyPreviewState extends State<OwnerPropertyPreview>
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                    ),     
+                    ),
                   ),
                   Text(
                     'Listed on $createdAt',
@@ -651,14 +653,16 @@ class _OwnerPropertyPreviewState extends State<OwnerPropertyPreview>
         _buildDetailRow('Bedrooms', bedrooms),
         _buildDetailRow('Bathrooms', bathrooms),
         _buildDetailRow('Square Footage', '$squareFootage sq.ft'),
-        
+
         // Conditional fields based on listing type
         if ((widget.propertyData['listingType'] ?? 'rent') == 'sale') ...[
-          _buildDetailRow('Furnishing Status', 
+          _buildDetailRow('Furnishing Status',
               widget.propertyData['furnishingStatus'] ?? 'Not specified'),
-          _buildDetailRow('Property Age', 
-              widget.propertyData['propertyAge']?.toString() ?? 'Not specified'),
-          _buildDetailRow('Ownership Type', 
+          _buildDetailRow(
+              'Property Age',
+              widget.propertyData['propertyAge']?.toString() ??
+                  'Not specified'),
+          _buildDetailRow('Ownership Type',
               widget.propertyData['ownershipType'] ?? 'Not specified'),
         ] else ...[
           _buildDetailRow(
@@ -986,16 +990,19 @@ class _OwnerPropertyPreviewState extends State<OwnerPropertyPreview>
   // Build price text based on listing type
   String _buildPriceText(Map<String, dynamic> propertyData) {
     final listingType = propertyData['listingType'] ?? 'rent';
-    
+
     if (listingType == 'sale') {
-      final salePrice = propertyData['salePrice'] ?? propertyData['price'] ?? 'N/A';
+      final salePrice =
+          propertyData['salePrice'] ?? propertyData['price'] ?? 'N/A';
       if (salePrice == 'N/A') return '₹N/A';
-      String priceValue = salePrice.toString().replaceAll('₹', '').replaceAll(',', '').trim();
+      String priceValue =
+          salePrice.toString().replaceAll('₹', '').replaceAll(',', '').trim();
       return '₹${Models.formatIndianCurrency(priceValue)}';
     } else {
       final rentPrice = propertyData['price'] ?? 'N/A';
       if (rentPrice == 'N/A') return '₹N/A';
-      String priceValue = rentPrice.toString().replaceAll('₹', '').replaceAll(',', '').trim();
+      String priceValue =
+          rentPrice.toString().replaceAll('₹', '').replaceAll(',', '').trim();
       return '₹${Models.formatIndianCurrency(priceValue)}';
     }
   }
@@ -1024,7 +1031,8 @@ class _OwnerPropertyPreviewState extends State<OwnerPropertyPreview>
         }
       }
       final listingType = widget.propertyData['listingType'] ?? 'rent';
-      final priceText = listingType == 'sale' ? formattedPrice : '$formattedPrice/month';
+      final priceText =
+          listingType == 'sale' ? formattedPrice : '$formattedPrice/month';
       final shareText = [
         '$title • $priceText',
         address,

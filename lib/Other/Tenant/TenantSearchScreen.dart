@@ -16,12 +16,12 @@ class TenantSearchTab extends StatefulWidget {
 
 class _TenantSearchTabState extends State<TenantSearchTab> {
   final TextEditingController _searchCtrl = TextEditingController();
+  final TextEditingController _maxPriceCtrl = TextEditingController();
   bool _loading = true;
   List<Map<String, dynamic>> _all = [];
   String _sort = 'Relevance';
   final Set<String> _selectedFilters = {};
-  RangeValues _priceRange = const RangeValues(3000, 20000);
-  double _maxPriceFound = 20000;
+  double _maxPriceLimit = 0; // User's custom maximum price limit
   // Availability: default to available-only, user can include unavailable
   bool _includeUnavailable = false;
   // Listing type filter
@@ -48,6 +48,22 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
     super.initState();
     _fetchProperties();
     _searchCtrl.addListener(() => setState(() {}));
+    // Initialize max price controller with default value
+    _maxPriceCtrl.text = '50000';
+    _maxPriceLimit = 50000;
+    _maxPriceCtrl.addListener(() {
+      final value = double.tryParse(_maxPriceCtrl.text.replaceAll(',', '')) ?? 0;
+      setState(() {
+        _maxPriceLimit = value;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _maxPriceCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchProperties() async {
@@ -62,9 +78,11 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
       if (maxPrice < 5000) maxPrice = 5000;
       setState(() {
         _all = list;
-        _maxPriceFound = maxPrice;
-        // Reset range to full span after first fetch
-        _priceRange = RangeValues(0, maxPrice);
+        // Update max price controller if current value is less than found max
+        if (_maxPriceLimit < maxPrice && _maxPriceCtrl.text.isEmpty) {
+          _maxPriceCtrl.text = Models.formatIndianCurrency(maxPrice.toStringAsFixed(0));
+          _maxPriceLimit = maxPrice;
+        }
       });
       if (list.isEmpty && mounted) {
         Models.showInfoSnackBar(context, 'No properties found.');
@@ -100,7 +118,8 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
         if (p['isAvailable'] != true) return false;
       }
       final priceVal = _parsePrice(p['price']);
-      if (priceVal < _priceRange.start || priceVal > _priceRange.end) {
+      // Filter by custom price range (0 to user entered max)
+      if (_maxPriceLimit > 0 && priceVal > _maxPriceLimit) {
         return false;
       }
       // Gender filter
@@ -237,11 +256,28 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
                 Row(
                   spacing: (width / 3) - 30,
                   children: [
-                    IconButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
-                        icon: const Icon(Icons.arrow_back_ios)),
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              Icons.arrow_back_ios_new,
+                              size: 16,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                     Text('Filters',
                         style: TextStyle(
                             fontSize: 18, fontWeight: FontWeight.w600)),
@@ -386,19 +422,72 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
                 const SizedBox(height: 16),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('Price Range',
+                  child: Text('Maximum Price',
                       style: TextStyle(
                           fontWeight: FontWeight.w600, color: Colors.black87)),
                 ),
-                RangeSlider(
-                  activeColor: AppConfig.primaryColor,
-                  values: _priceRange,
-                  min: 0,
-                  max: _maxPriceFound,
-                  divisions: 20,
-                  labels: RangeLabels('₹${Models.formatIndianCurrency(_priceRange.start.round())}',
-                      '₹${Models.formatIndianCurrency(_priceRange.end.round())}'),
-                  onChanged: (v) => setM(() => _priceRange = v),
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: TextField(
+                    controller: _maxPriceCtrl,
+                    keyboardType: TextInputType.number,
+                    onChanged: (value) {
+                      // Remove any existing formatting and parse the number
+                      final cleanValue = value.replaceAll(RegExp(r'[^0-9]'), '');
+                      if (cleanValue.isNotEmpty) {
+                        final number = int.tryParse(cleanValue);
+                        if (number != null) {
+                          // Format the number and update the controller
+                          final formatted = Models.formatIndianCurrency(number.toString());
+                          if (formatted != value) {
+                            _maxPriceCtrl.value = _maxPriceCtrl.value.copyWith(
+                              text: formatted,
+                              selection: TextSelection.collapsed(offset: formatted.length),
+                            );
+                          }
+                        }
+                      }
+                      setM(() {});
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Enter maximum price',
+                      prefixIcon: Padding(
+                        padding: const EdgeInsets.all(15.0),
+                        child: Text(
+                          '₹',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                      prefixIconConstraints: const BoxConstraints(minWidth: 0),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
+                    ),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Range: ₹0 to ₹${_maxPriceLimit > 0 ? Models.formatIndianCurrency(_maxPriceLimit.toStringAsFixed(0)) : "Not set"}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Expanded(
@@ -422,6 +511,8 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
                           setState(() {
                             _selectedFilters.clear();
                             _includeUnavailable = false; // reset to default
+                            _maxPriceCtrl.text = '50000'; // reset to default
+                            _maxPriceLimit = 50000;
                           });
                           Navigator.pop(context);
                         },

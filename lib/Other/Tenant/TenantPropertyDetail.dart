@@ -98,6 +98,18 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
     }
   }
 
+  String _getInitials(String? name) {
+    if (name == null || name.isEmpty) return '??';
+    final nameParts = name.trim().split(' ');
+    String initials = '';
+    for (var part in nameParts) {
+      if (part.isNotEmpty && initials.length < 2) {
+        initials += part[0].toUpperCase();
+      }
+    }
+    return initials.isEmpty ? '??' : initials;
+  }
+
   Future<void> _trackPropertyView() async {
     try {
       final user = FirebaseAuth.instance.currentUser?.email;
@@ -871,15 +883,20 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: Colors.grey[300],
+                    backgroundColor: ownerProfilePicture.isNotEmpty 
+                        ? Colors.grey[300] 
+                        : AppConfig.primaryColor.withOpacity(0.1),
                     backgroundImage: ownerProfilePicture.isNotEmpty
                         ? NetworkImage(ownerProfilePicture)
                         : null,
                     child: ownerProfilePicture.isEmpty
-                        ? Icon(
-                            Icons.person,
-                            color: Colors.grey[700],
-                            size: 32,
+                        ? Text(
+                            _getInitials(ownerName),
+                            style: TextStyle(
+                              color: AppConfig.primaryColor,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
                           )
                         : null,
                   ),
