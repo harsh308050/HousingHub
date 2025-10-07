@@ -115,9 +115,10 @@ class _TenantHomeScreenState extends State<TenantHomeScreen>
                     Navigator.of(context).pop();
                     _checkAndRetryLocation();
                   },
-                  child: Text('Not Now'),
+                  child: Text('Not Now',
+                      style: TextStyle(color: AppConfig.primaryColor)),
                 ),
-                TextButton(
+                ElevatedButton(
                   onPressed: () async {
                     Navigator.of(context).pop();
                     await Geolocator.openLocationSettings();
@@ -125,10 +126,11 @@ class _TenantHomeScreenState extends State<TenantHomeScreen>
                     await Future.delayed(Duration(seconds: 3));
                     _checkAndRetryLocation();
                   },
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppConfig.primaryColor,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppConfig.primaryColor,
                   ),
-                  child: Text('Open Settings'),
+                  child: Text('Open Settings',
+                      style: TextStyle(color: Colors.white)),
                 ),
               ],
             ),
@@ -988,18 +990,13 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                                       ),
                                     ),
                                     SizedBox(height: 10),
-                                    ElevatedButton(
-                                      onPressed: () {
-                                        // Show city picker to let user change city
-                                        setState(() {
-                                          _showCityPicker = true;
-                                        });
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppConfig.primaryColor,
-                                        foregroundColor: Colors.white,
+                                    Text(
+                                      'Tip: Use the Search tab to find properties by area or landmark.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 12,
                                       ),
-                                      child: Text('Change City'),
                                     ),
                                   ],
                                 ),

@@ -703,10 +703,9 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
         .trim();
     final phone = _sanitizePhone(raw);
     if (phone.isEmpty) {
-  if (mounted) {
-    Models.showWarningSnackBar(
-    context, 'Owner phone number not available');
-  }
+      if (mounted) {
+        Models.showWarningSnackBar(context, 'Owner phone number not available');
+      }
       return;
     }
     final uri = Uri(scheme: 'tel', path: phone);
@@ -723,10 +722,10 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
     final raw = (tenant['mobileNumber'] ?? '').toString().trim();
     final phone = _sanitizePhone(raw);
     if (phone.isEmpty) {
-  if (mounted) {
-    Models.showWarningSnackBar(
-    context, 'Tenant phone number not available');
-  }
+      if (mounted) {
+        Models.showWarningSnackBar(
+            context, 'Tenant phone number not available');
+      }
       return;
     }
     final uri = Uri(scheme: 'tel', path: phone);

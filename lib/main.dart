@@ -41,6 +41,11 @@ class _MyAppState extends State<MyApp> {
       theme: ThemeData(
         primaryColor: AppConfig.primaryColor,
         colorScheme: ColorScheme.fromSeed(seedColor: AppConfig.primaryColor),
+        textSelectionTheme: TextSelectionThemeData(
+          cursorColor: AppConfig.primaryColor,
+          selectionColor: AppConfig.primaryColor.withOpacity(0.3),
+          selectionHandleColor: AppConfig.primaryColor,
+        ),
       ),
       navigatorKey: _navKey,
       home: const Splashscreen(),

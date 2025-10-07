@@ -7,11 +7,9 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:housinghub/config/AppConfig.dart';
+import 'package:housinghub/config/ApiKeys.dart';
 
 class PdfReceiptGenerator {
-  static const String _cloudinaryCloudName = 'debf09qz0';
-  static const String _cloudinaryUploadPreset = 'HousingHub';
-
   static Future<String> generateAndUploadReceipt({
     required String bookingId,
     required Map<String, dynamic> tenantData,
@@ -58,8 +56,10 @@ class PdfReceiptGenerator {
       await file.writeAsBytes(await pdf.save());
 
       // Upload to Cloudinary as RAW (best for PDFs for direct download)
-      final cloudinary =
-          CloudinaryPublic(_cloudinaryCloudName, _cloudinaryUploadPreset);
+      final cloudinary = CloudinaryPublic(
+        ApiKeys.cloudinaryCloudName,
+        ApiKeys.cloudinaryUploadPreset,
+      );
       final response = await cloudinary.uploadFile(
         CloudinaryFile.fromFile(
           file.path,

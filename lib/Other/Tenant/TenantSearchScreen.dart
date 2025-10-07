@@ -766,6 +766,109 @@ class _PropertyResultCardState extends State<_PropertyResultCard> {
     return double.tryParse(s) ?? 0;
   }
 
+  Widget _buildAmenitiesRow(Map<String, dynamic> data) {
+    // Get amenities from property data
+    List<String> amenities = [];
+    if (data['amenities'] is List) {
+      amenities = List<String>.from(data['amenities']);
+    }
+
+    // If no amenities, show default placeholder
+    if (amenities.isEmpty) {
+      return Row(
+        children: const [
+          Icon(Icons.info_outline, size: 14, color: Colors.grey),
+          SizedBox(width: 4),
+          Text('No amenities listed', style: TextStyle(fontSize: 11, color: Colors.grey))
+        ],
+      );
+    }
+
+    // Show first 3 amenities + count of remaining
+    const int maxVisible = 3;
+    final List<String> visibleAmenities = amenities.take(maxVisible).toList();
+    final int remainingCount = amenities.length - maxVisible;
+
+    // Icon mapping for amenities
+    IconData _getAmenityIcon(String amenity) {
+      switch (amenity.toLowerCase()) {
+        case 'wifi':
+        case 'wi-fi':
+          return Icons.wifi;
+        case 'parking':
+          return Icons.local_parking;
+        case 'laundry':
+          return Icons.local_laundry_service;
+        case 'ac':
+        case 'air conditioning':
+          return Icons.ac_unit;
+        case 'mess facility':
+        case 'mess':
+          return Icons.restaurant;
+        case 'house keeping':
+        case 'housekeeping':
+          return Icons.cleaning_services;
+        case 'furnished':
+          return Icons.chair;
+        case 'unfurnished':
+          return Icons.other_houses_outlined;
+        default:
+          return Icons.check_circle;
+      }
+    }
+
+    List<Widget> amenityWidgets = [];
+
+    // Add visible amenities
+    for (int i = 0; i < visibleAmenities.length; i++) {
+      if (i > 0) {
+        amenityWidgets.add(const SizedBox(width: 14));
+      }
+      
+      final amenity = visibleAmenities[i];
+      amenityWidgets.add(
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(_getAmenityIcon(amenity), size: 14, color: Colors.grey[600]),
+            const SizedBox(width: 4),
+            Text(
+              amenity.length > 8 ? '${amenity.substring(0, 8)}...' : amenity,
+              style: const TextStyle(fontSize: 11),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Add remaining count if there are more amenities
+    if (remainingCount > 0) {
+      amenityWidgets.add(const SizedBox(width: 14));
+      amenityWidgets.add(
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: AppConfig.primaryColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppConfig.primaryColor.withOpacity(0.3)),
+          ),
+          child: Text(
+            '+$remainingCount',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppConfig.primaryColor,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: amenityWidgets,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = widget.data;
@@ -932,27 +1035,7 @@ class _PropertyResultCardState extends State<_PropertyResultCard> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Row(children: const [
-                        Icon(Icons.wifi, size: 14),
-                        SizedBox(width: 4),
-                        Text('Wi-Fi', style: TextStyle(fontSize: 11))
-                      ]),
-                      const SizedBox(width: 14),
-                      Row(children: const [
-                        Icon(Icons.cleaning_services, size: 14),
-                        SizedBox(width: 4),
-                        Text('House Keeping', style: TextStyle(fontSize: 11))
-                      ]),
-                      const SizedBox(width: 14),
-                      Row(children: const [
-                        Icon(Icons.restaurant, size: 14),
-                        SizedBox(width: 4),
-                        Text('Mess', style: TextStyle(fontSize: 11))
-                      ]),
-                    ],
-                  ),
+                  _buildAmenitiesRow(data),
                   const SizedBox(height: 12),
                   Row(
                     children: [

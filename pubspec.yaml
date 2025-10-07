@@ -66,6 +66,7 @@ dependencies:
   path_provider: ^2.1.4
   file_saver: ^0.2.8
   open_filex: ^4.5.0
+  google_fonts: ^4.0.3
 
 dev_dependencies:
   flutter_test:

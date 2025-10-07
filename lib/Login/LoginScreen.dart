@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:housinghub/config/ApiKeys.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -75,6 +76,39 @@ class _LoginScreenState extends State<LoginScreen> {
     _citySearchController.addListener(_filterCities);
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Check for navigation arguments to pre-open specific tabs
+    final arguments =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+    if (arguments != null && arguments['preOpenTab'] != null) {
+      final preOpenTab = arguments['preOpenTab'] as String;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            if (preOpenTab == 'ownerSignup') {
+              isTenant = false;
+              isLoginTab = false;
+            } else if (preOpenTab == 'tenantSignup') {
+              isTenant = true;
+              isLoginTab = false;
+            } else if (preOpenTab == 'ownerLogin') {
+              isTenant = false;
+              isLoginTab = true;
+            } else if (preOpenTab == 'tenantLogin') {
+              isTenant = true;
+              isLoginTab = true;
+            }
+          });
+        }
+      });
+    }
+  }
+
   // Filter states based on search
   void _filterStates() {
     String query = _stateSearchController.text.toLowerCase();
@@ -101,8 +135,8 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  String stateCityAPI =
-      "YTBrQWhHWEVWUk9SSEVSYllzbVNVTUJWRm1oaFBpN2FWeTRKbFpqbQ==";
+  // Using centralized CSC API key
+  String stateCityAPI = ApiKeys.cscApiKey;
   Future<void> _fetchStates() async {
     setState(() {
       isLoading = true;
@@ -110,7 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final response = await http.get(
         Uri.parse('https://api.countrystatecity.in/v1/countries/IN/states'),
-        headers: {'X-CSCAPI-KEY': '$stateCityAPI'},
+        headers: {'X-CSCAPI-KEY': stateCityAPI},
       );
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
@@ -162,7 +196,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final response = await http.get(
         Uri.parse(
             'https://api.countrystatecity.in/v1/countries/IN/states/$stateCode/cities'),
-        headers: {'X-CSCAPI-KEY': '$stateCityAPI'},
+        headers: {'X-CSCAPI-KEY': stateCityAPI},
       );
 
       if (response.statusCode == 200) {
@@ -342,6 +376,21 @@ class _LoginScreenState extends State<LoginScreen> {
         final firstName = _firstNameController.text.trim();
         final lastName = _lastNameController.text.trim();
         final mobileNumber = _mobileController.text.trim();
+
+        log("Attempting to validate mobile number: $mobileNumber");
+
+        // Validate mobile number uniqueness before proceeding
+        try {
+          await Api.validateMobileForSignup(mobileNumber, currentEmail: email);
+          log("Mobile number validation passed");
+        } catch (e) {
+          log("Mobile number validation failed: $e");
+          setState(() {
+            isLoading = false;
+          });
+          Models.showErrorSnackBar(context, e.toString());
+          return;
+        }
 
         log("Attempting to create user with email: $email");
 
@@ -534,19 +583,21 @@ class _LoginScreenState extends State<LoginScreen> {
             throw Exception('Invalid email or password');
           }
         },
-        onSuccess: (userData) {
+        onSuccess: (userData) async {
           if (userData != null) {
             // Login successful, navigate to home page or dashboard
             _clearInputFields();
+            // Validate mobile number consistency
+            try {
+              await Api.validateMobileConsistency(userData['email'] ?? email);
+              log("Mobile consistency validation passed for tenant login");
+            } catch (e) {
+              log("Mobile consistency validation failed for tenant login: $e");
+              // Log warning but don't block login
+            }
             // Gate by approval status for owners
-            final email = _emailController.text.trim();
-            Api.getOwnerApprovalStatus(email).then((status) {
-              if (status == 'approved') {
-                Navigator.pushReplacementNamed(context, 'OwnerHomeScreen');
-              } else {
-                Navigator.pushReplacementNamed(context, 'OwnerApprovalScreen');
-              }
-            });
+            // _navigateToHomeScreen();
+            Navigator.pushReplacementNamed(context, 'TenantHomeScreen');
           }
         },
         onError: (e) {
@@ -623,6 +674,15 @@ class _LoginScreenState extends State<LoginScreen> {
           } else {
             // Login successful with user data
             _clearInputFields();
+            // Validate mobile number consistency
+            try {
+              final userData = result as Map<String, dynamic>;
+              await Api.validateMobileConsistency(userData['email'] ?? email);
+              log("Mobile consistency validation passed for owner login");
+            } catch (e) {
+              log("Mobile consistency validation failed for owner login: $e");
+              // Log warning but don't block login
+            }
             _navigateToHomeScreen();
           }
         },
@@ -659,6 +719,21 @@ class _LoginScreenState extends State<LoginScreen> {
         final mobileNumber = _mobileController.text.trim();
         final cityValue = city ?? ''; // Use dropdown value
         final stateValue = state ?? ''; // Use dropdown value
+
+        log("Attempting to validate mobile number: $mobileNumber");
+
+        // Validate mobile number uniqueness before proceeding
+        try {
+          await Api.validateMobileForSignup(mobileNumber, currentEmail: email);
+          log("Mobile number validation passed");
+        } catch (e) {
+          log("Mobile number validation failed: $e");
+          setState(() {
+            isLoading = false;
+          });
+          Models.showErrorSnackBar(context, e.toString());
+          return;
+        }
 
         // Validate that state and city are selected
         if (stateValue.isEmpty) {
@@ -1482,31 +1557,22 @@ class _LoginScreenState extends State<LoginScreen> {
                           children: [
                             if (_stateSearchController.text.isNotEmpty)
                               IconButton(
-                                icon: Icon(Icons.clear, color: Colors.grey),
+                                icon: Icon(
+                                  _showStateDropdown
+                                      ? Icons.arrow_drop_up
+                                      : Icons.arrow_drop_down,
+                                  color: Color(0xFF007AFF),
+                                ),
                                 onPressed: () {
                                   setState(() {
-                                    _stateSearchController.clear();
-                                    _showStateDropdown = false;
+                                    _showStateDropdown = !_showStateDropdown;
+                                    if (_showStateDropdown) {
+                                      _showCityDropdown = false;
+                                      _filteredStates = _states;
+                                    }
                                   });
                                 },
                               ),
-                            IconButton(
-                              icon: Icon(
-                                _showStateDropdown
-                                    ? Icons.arrow_drop_up
-                                    : Icons.arrow_drop_down,
-                                color: Color(0xFF007AFF),
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _showStateDropdown = !_showStateDropdown;
-                                  if (_showStateDropdown) {
-                                    _showCityDropdown = false;
-                                    _filteredStates = _states;
-                                  }
-                                });
-                              },
-                            ),
                           ],
                         ),
                         border: InputBorder.none,
@@ -1623,38 +1689,28 @@ class _LoginScreenState extends State<LoginScreen> {
                                 children: [
                                   if (_citySearchController.text.isNotEmpty)
                                     IconButton(
-                                      icon:
-                                          Icon(Icons.clear, color: Colors.grey),
+                                      icon: Icon(
+                                        _showCityDropdown
+                                            ? Icons.arrow_drop_up
+                                            : Icons.arrow_drop_down,
+                                        color: AppConfig.primaryColor,
+                                      ),
                                       onPressed: () {
+                                        if (_cities.isEmpty) {
+                                          Models.showWarningSnackBar(context,
+                                              'Please select a state first');
+                                          return;
+                                        }
                                         setState(() {
-                                          _citySearchController.clear();
-                                          _showCityDropdown = false;
-                                          city = null;
+                                          _showCityDropdown =
+                                              !_showCityDropdown;
+                                          if (_showCityDropdown) {
+                                            _showStateDropdown = false;
+                                            _filteredCities = _cities;
+                                          }
                                         });
                                       },
                                     ),
-                                  IconButton(
-                                    icon: Icon(
-                                      _showCityDropdown
-                                          ? Icons.arrow_drop_up
-                                          : Icons.arrow_drop_down,
-                                      color: AppConfig.primaryColor,
-                                    ),
-                                    onPressed: () {
-                                      if (_cities.isEmpty) {
-                                        Models.showWarningSnackBar(context,
-                                            'Please select a state first');
-                                        return;
-                                      }
-                                      setState(() {
-                                        _showCityDropdown = !_showCityDropdown;
-                                        if (_showCityDropdown) {
-                                          _showStateDropdown = false;
-                                          _filteredCities = _cities;
-                                        }
-                                      });
-                                    },
-                                  ),
                                 ],
                               ),
                               border: InputBorder.none,
@@ -1753,14 +1809,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: BoxDecoration(
                       color: isLoading ? Colors.grey[400] : Color(0xFF007AFF),
                       borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0xFF007AFF).withOpacity(0.3),
-                          spreadRadius: 1,
-                          blurRadius: 3,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
                     ),
                     padding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                     child: isLoading

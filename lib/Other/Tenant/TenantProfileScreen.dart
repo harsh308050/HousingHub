@@ -8,6 +8,7 @@ import '../../config/AppConfig.dart';
 import '/Helper/API.dart';
 import 'TenantBookingsScreen.dart';
 import 'TenantSupportScreen.dart';
+import '../../Login/LoginScreen.dart';
 
 class TenantProfileTab extends StatefulWidget {
   final User? user;
@@ -313,8 +314,8 @@ class _TenantProfileTabState extends State<TenantProfileTab>
           .doc(email)
           .set({'photoUrl': url}, SetOptions(merge: true));
       setState(() => photoUrl = url);
-    if (!mounted) return;
-    Models.showSuccessSnackBar(context, 'Profile photo updated');
+      if (!mounted) return;
+      Models.showSuccessSnackBar(context, 'Profile photo updated');
     } catch (e) {
       if (!mounted) return;
       Models.showErrorSnackBar(context, 'Failed to update photo: $e');
@@ -346,11 +347,11 @@ class _TenantProfileTabState extends State<TenantProfileTab>
         mobile = phone;
         gender = g;
       });
-    if (!mounted) return;
-    Models.showSuccessSnackBar(context, 'Profile saved');
+      if (!mounted) return;
+      Models.showSuccessSnackBar(context, 'Profile saved');
     } catch (e) {
-    if (!mounted) return;
-    Models.showErrorSnackBar(context, 'Failed to save: $e');
+      if (!mounted) return;
+      Models.showErrorSnackBar(context, 'Failed to save: $e');
     }
   }
 }
@@ -436,7 +437,7 @@ class _DocumentTileState extends State<_DocumentTile> {
   Future<void> _pickAndUpload() async {
     if (widget.options.length > 1 &&
         (_selectedOption == null || _selectedOption!.isEmpty)) {
-    Models.showWarningSnackBar(context, 'Please select a document type');
+      Models.showWarningSnackBar(context, 'Please select a document type');
       return;
     }
     try {
@@ -463,11 +464,11 @@ class _DocumentTileState extends State<_DocumentTile> {
         'status': 'Uploaded',
         'uploadedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-    if (!mounted) return;
-    Models.showSuccessSnackBar(context, '${widget.label} uploaded');
+      if (!mounted) return;
+      Models.showSuccessSnackBar(context, '${widget.label} uploaded');
     } catch (e) {
-    if (!mounted) return;
-    Models.showErrorSnackBar(context, 'Upload failed: $e');
+      if (!mounted) return;
+      Models.showErrorSnackBar(context, 'Upload failed: $e');
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -688,8 +689,10 @@ class _PreferencesTabState extends State<_PreferencesTab> {
                 ),
                 TextButton.icon(
                   onPressed: widget.onPickPhoto,
-                  icon: const Icon(Icons.camera_alt_outlined),
-                  label: const Text('Change photo'),
+                  icon: const Icon(Icons.camera_alt_outlined,
+                      color: AppConfig.primaryColor),
+                  label: const Text('Change photo',
+                      style: TextStyle(color: AppConfig.primaryColor)),
                 ),
               ],
             ),
@@ -760,8 +763,6 @@ class _PreferencesTabState extends State<_PreferencesTab> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
         children: [
-          const Icon(Icons.wc_outlined),
-          const SizedBox(width: 12),
           const Text('Gender'),
           const Spacer(),
           DropdownButton<String>(
@@ -848,7 +849,7 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-class _BookingsTab extends StatelessWidget {
+class _BookingsTab extends StatefulWidget {
   final int activeCount;
   final int pendingCount;
   final int totalCount;
@@ -862,17 +863,79 @@ class _BookingsTab extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    Future<void> _signOut() async {
-      try {
-        await Api.signOut();
+  State<_BookingsTab> createState() => _BookingsTabState();
+}
 
-        Navigator.pushReplacementNamed(context, 'LoginScreen');
-      } catch (e) {
-        Models.showErrorSnackBar(context, 'Error signing out: $e');
-      }
+class _BookingsTabState extends State<_BookingsTab> {
+  bool _checkingAccountStatus = false;
+
+  Future<void> _signOut() async {
+    try {
+      await Api.signOut();
+      Navigator.pushReplacementNamed(context, 'LoginScreen');
+    } catch (e) {
+      Models.showErrorSnackBar(context, 'Error signing out: $e');
     }
+  }
 
+  Future<void> _switchToOwnerAccount() async {
+    setState(() => _checkingAccountStatus = true);
+
+    try {
+      final currentUser = Api.getCurrentUser();
+      if (currentUser?.email == null) {
+        Models.showErrorSnackBar(context, 'No user logged in');
+        return;
+      }
+
+      final switchingInfo =
+          await Api.getAccountSwitchingInfo(currentUser!.email!);
+
+      if (switchingInfo['canSwitchToOwner'] == true) {
+        // User has approved owner account, navigate to owner home
+        Navigator.pushNamedAndRemoveUntil(
+            context, 'OwnerHomeScreen', (route) => false);
+      } else if (switchingInfo['hasOwnerAccount'] == true) {
+        // User has owner account but not approved
+        final status = switchingInfo['ownerApprovalStatus'] ?? 'unknown';
+        if (status == 'pending') {
+          Models.showInfoSnackBar(context,
+              'Your owner account is pending approval. Please wait for verification.');
+          Navigator.pushNamedAndRemoveUntil(
+              context, 'OwnerApprovalScreen', (route) => false);
+        } else if (status == 'rejected') {
+          Models.showWarningSnackBar(context,
+              'Your owner account was rejected. Please resubmit your documents.');
+          Navigator.pushNamedAndRemoveUntil(
+              context, 'OwnerApprovalScreen', (route) => false);
+        } else {
+          Models.showInfoSnackBar(
+              context, 'Please complete your owner verification first.');
+          Navigator.pushNamedAndRemoveUntil(
+              context, 'OwnerApprovalScreen', (route) => false);
+        }
+      } else {
+        // User doesn't have owner account, navigate to signup
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const LoginScreen(),
+            settings: RouteSettings(arguments: {
+              'preOpenTab': 'ownerSignup',
+              'switchingFromTenant': true,
+            }),
+          ),
+        );
+      }
+    } catch (e) {
+      Models.showErrorSnackBar(context, 'Error checking account status: $e');
+    } finally {
+      if (mounted) setState(() => _checkingAccountStatus = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -900,7 +963,7 @@ class _BookingsTab extends StatelessWidget {
               Expanded(
                 child: _buildStatCard(
                   'Active',
-                  isLoading ? '...' : '$activeCount',
+                  widget.isLoading ? '...' : '${widget.activeCount}',
                   Icons.home_outlined,
                   Colors.green,
                 ),
@@ -909,7 +972,7 @@ class _BookingsTab extends StatelessWidget {
               Expanded(
                 child: _buildStatCard(
                   'Pending',
-                  isLoading ? '...' : '$pendingCount',
+                  widget.isLoading ? '...' : '${widget.pendingCount}',
                   Icons.schedule_outlined,
                   Colors.orange,
                 ),
@@ -918,7 +981,7 @@ class _BookingsTab extends StatelessWidget {
               Expanded(
                 child: _buildStatCard(
                   'Total',
-                  isLoading ? '...' : '$totalCount',
+                  widget.isLoading ? '...' : '${widget.totalCount}',
                   Icons.book_outlined,
                   AppConfig.primaryColor,
                 ),
@@ -956,6 +1019,51 @@ class _BookingsTab extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Account switching section
+          ElevatedButton(
+            onPressed: _checkingAccountStatus ? null : _switchToOwnerAccount,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppConfig.primaryColor,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+                side: BorderSide(color: AppConfig.primaryColor, width: 1.5),
+              ),
+              shadowColor: Colors.black.withOpacity(0),
+            ),
+            child: _checkingAccountStatus
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppConfig.primaryColor,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('Checking...'),
+                    ],
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Switch to Owner Mode',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
           ),
 
           const SizedBox(height: 16),

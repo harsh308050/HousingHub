@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:housinghub/config/ApiKeys.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -71,6 +72,7 @@ class _BookingScreenState extends State<BookingScreen>
   DateTime? _paymentCompletedAt;
   bool _isSubmitting = false;
   bool _isUnavailable = false;
+  bool _isOpeningPayment = false;
 
   // Notes
   final TextEditingController _notesController = TextEditingController();
@@ -145,6 +147,7 @@ class _BookingScreenState extends State<BookingScreen>
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) {
     setState(() {
+      _isOpeningPayment = false;
       _paymentCompleted = true;
       _paymentId = response.paymentId;
       _paymentSignature = response.signature;
@@ -161,10 +164,16 @@ class _BookingScreenState extends State<BookingScreen>
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
+    setState(() {
+      _isOpeningPayment = false;
+    });
     Models.showErrorSnackBar(context, 'Payment failed: ${response.message}');
   }
 
   void _handleExternalWallet(ExternalWalletResponse response) {
+    setState(() {
+      _isOpeningPayment = false;
+    });
     Models.showInfoSnackBar(context, 'External Wallet: ${response.walletName}');
   }
 
@@ -1459,28 +1468,34 @@ class _BookingScreenState extends State<BookingScreen>
           const SizedBox(height: 24),
 
           if (!_paymentCompleted)
-            ElevatedButton(
-              onPressed: () {
-                if (_isUnavailable) {
-                  Models.showWarningSnackBar(context,
-                      'This property is no longer available for booking.');
-                  return;
-                }
-                _makePayment(total);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppConfig.primaryColor,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isOpeningPayment
+                    ? null
+                    : () {
+                        if (_isUnavailable) {
+                          Models.showWarningSnackBar(context,
+                              'This property is no longer available for booking.');
+                          return;
+                        }
+                        setState(() => _isOpeningPayment = true);
+                        _makePayment(total);
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppConfig.primaryColor,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-              ),
-              child: const Text(
-                'Pay Now',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
+                child: Text(
+                  _isOpeningPayment ? 'Opening…' : 'Pay Now',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             )
@@ -1898,17 +1913,25 @@ class _BookingScreenState extends State<BookingScreen>
           context, 'This property is no longer available for booking.');
       return;
     }
+    if (amount <= 0) {
+      Models.showErrorSnackBar(
+          context, 'Payment amount is invalid. Please contact support.');
+      return;
+    }
+    final logoUrl = '${AppConfig.companyWebsite}/logo.png';
     var options = {
-      'key': 'rzp_test_1DP5mmOlF5G5ag', // Replace with your Razorpay key
+      'key': ApiKeys.razorpayKey,
       'amount': (amount * 100).toInt(), // Razorpay accepts amount in paisa
       'name': 'HousingHub',
       'description': 'Property Booking Payment',
+      'currency': 'INR',
+      'image': logoUrl,
       'prefill': {
         'contact': _phoneController.text,
         'email': FirebaseAuth.instance.currentUser?.email ?? '',
       },
       'theme': {
-        'color': AppConfig.primaryColor,
+        'color': _colorToHex(AppConfig.primaryColor),
       }
     };
 
@@ -1917,7 +1940,18 @@ class _BookingScreenState extends State<BookingScreen>
     } catch (e) {
       print('Error opening Razorpay: $e');
       Models.showErrorSnackBar(context, 'Error opening payment gateway');
+      if (mounted) {
+        setState(() => _isOpeningPayment = false);
+      }
     }
+  }
+
+  String _colorToHex(Color color) {
+    // Returns #RRGGBB (drops alpha)
+    final r = color.red.toRadixString(16).padLeft(2, '0');
+    final g = color.green.toRadixString(16).padLeft(2, '0');
+    final b = color.blue.toRadixString(16).padLeft(2, '0');
+    return '#${(r + g + b).toUpperCase()}';
   }
 
   List<String> _getAvailableGenders() {

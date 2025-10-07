@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:housinghub/config/ApiKeys.dart';
 
 class EditOwnerProfile extends StatefulWidget {
   final Map<String, dynamic>? ownerData;
@@ -50,9 +51,8 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
   String? selectedState;
   String? selectedCity;
 
-  // API key for state/city data
-  String stateCityAPI =
-      "YTBrQWhHWEVWUk9SSEVSYllzbVNVTUJWRm1oaFBpN2FWeTRKbFpqbQ==";
+  // API key for state/city data (centralized)
+  String stateCityAPI = ApiKeys.cscApiKey;
 
   @override
   void initState() {
@@ -149,7 +149,7 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
     try {
       final response = await http.get(
         Uri.parse('https://api.countrystatecity.in/v1/countries/IN/states'),
-        headers: {'X-CSCAPI-KEY': stateCityAPI},
+  headers: {'X-CSCAPI-KEY': stateCityAPI},
       );
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
@@ -217,7 +217,7 @@ class _EditOwnerProfileState extends State<EditOwnerProfile> {
       final response = await http.get(
         Uri.parse(
             'https://api.countrystatecity.in/v1/countries/IN/states/$stateCode/cities'),
-        headers: {'X-CSCAPI-KEY': stateCityAPI},
+  headers: {'X-CSCAPI-KEY': stateCityAPI},
       );
 
       if (response.statusCode == 200) {

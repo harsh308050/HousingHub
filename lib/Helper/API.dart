@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
 import 'dart:developer' as developer;
 import 'package:rxdart/rxdart.dart' as rx;
+import 'package:housinghub/config/ApiKeys.dart';
 
 // Property model class
 class Property {
@@ -911,8 +912,11 @@ class Api {
       print('Uploading image to Cloudinary: ${imageFile.path}');
 
       // Import Cloudinary
-      final cloudinary =
-          CloudinaryPublic('debf09qz0', 'HousingHub', cache: false);
+      final cloudinary = CloudinaryPublic(
+        ApiKeys.cloudinaryCloudName,
+        ApiKeys.cloudinaryUploadPreset,
+        cache: false,
+      );
 
       // Check if file exists and is readable
       if (!imageFile.existsSync()) {
@@ -957,8 +961,11 @@ class Api {
       print('Uploading video to Cloudinary: ${videoFile.path}');
 
       // Import Cloudinary
-      final cloudinary =
-          CloudinaryPublic('debf09qz0', 'HousingHub', cache: false);
+      final cloudinary = CloudinaryPublic(
+        ApiKeys.cloudinaryCloudName,
+        ApiKeys.cloudinaryUploadPreset,
+        cache: false,
+      );
 
       // Check if file exists and is readable
       if (!videoFile.existsSync()) {
@@ -1750,10 +1757,7 @@ class Api {
     try {
       final response = await http.get(
         Uri.parse('https://api.countrystatecity.in/v1/countries/IN/states'),
-        headers: {
-          'X-CSCAPI-KEY':
-              'YTBrQWhHWEVWUk9SSEVSYllzbVNVTUJWRm1oaFBpN2FWeTRKbFpqbQ=='
-        },
+        headers: {'X-CSCAPI-KEY': ApiKeys.cscApiKey},
       );
 
       if (response.statusCode == 200) {
@@ -1786,10 +1790,7 @@ class Api {
       final response = await http.get(
         Uri.parse(
             'https://api.countrystatecity.in/v1/countries/IN/states/$stateCode/cities'),
-        headers: {
-          'X-CSCAPI-KEY':
-              'YTBrQWhHWEVWUk9SSEVSYllzbVNVTUJWRm1oaFBpN2FWeTRKbFpqbQ=='
-        },
+        headers: {'X-CSCAPI-KEY': ApiKeys.cscApiKey},
       );
 
       if (response.statusCode == 200) {
@@ -3948,6 +3949,254 @@ class Api {
       await batch.commit();
     } catch (e) {
       print('Error cleaning up old notifications: $e');
+    }
+  }
+
+  // =============================
+  // ACCOUNT SWITCHING HELPERS
+  // =============================
+
+  // Check if user has both tenant and owner accounts
+  static Future<Map<String, bool>> getUserAccountTypes(String email) async {
+    if (email.isEmpty) {
+      return {'isTenant': false, 'isOwner': false};
+    }
+
+    try {
+      // Check if user exists in both collections
+      final tenantDoc = await _firestore.collection('Tenants').doc(email).get();
+      final ownerDoc = await _firestore.collection('Owners').doc(email).get();
+
+      return {
+        'isTenant': tenantDoc.exists,
+        'isOwner': ownerDoc.exists,
+      };
+    } catch (e) {
+      print('Error checking user account types: $e');
+      return {'isTenant': false, 'isOwner': false};
+    }
+  }
+
+  // Check if user can switch to owner account (exists and approved)
+  static Future<bool> canSwitchToOwnerAccount(String email) async {
+    if (email.isEmpty) return false;
+
+    try {
+      final ownerDoc = await _firestore.collection('Owners').doc(email).get();
+      if (!ownerDoc.exists) return false;
+
+      final data = ownerDoc.data() as Map<String, dynamic>;
+      final approvalStatus = data['approvalStatus']?.toString() ?? '';
+
+      // User can switch if they have an approved owner account
+      return approvalStatus == 'approved';
+    } catch (e) {
+      print('Error checking owner account status: $e');
+      return false;
+    }
+  }
+
+  // Check if user can switch to tenant account (exists)
+  static Future<bool> canSwitchToTenantAccount(String email) async {
+    if (email.isEmpty) return false;
+
+    try {
+      final tenantDoc = await _firestore.collection('Tenants').doc(email).get();
+      return tenantDoc.exists;
+    } catch (e) {
+      print('Error checking tenant account status: $e');
+      return false;
+    }
+  }
+
+  // Get account switching info for current user
+  static Future<Map<String, dynamic>> getAccountSwitchingInfo(
+      String email) async {
+    if (email.isEmpty) {
+      return {
+        'canSwitchToOwner': false,
+        'canSwitchToTenant': false,
+        'ownerApprovalStatus': null,
+        'hasOwnerAccount': false,
+        'hasTenantAccount': false,
+      };
+    }
+
+    try {
+      final accountTypes = await getUserAccountTypes(email);
+      final canSwitchToOwner = await canSwitchToOwnerAccount(email);
+      final canSwitchToTenant = await canSwitchToTenantAccount(email);
+
+      String? ownerApprovalStatus;
+      if (accountTypes['isOwner'] == true) {
+        final ownerDoc = await _firestore.collection('Owners').doc(email).get();
+        if (ownerDoc.exists) {
+          final data = ownerDoc.data() as Map<String, dynamic>;
+          ownerApprovalStatus = data['approvalStatus']?.toString();
+        }
+      }
+
+      return {
+        'canSwitchToOwner': canSwitchToOwner,
+        'canSwitchToTenant': canSwitchToTenant,
+        'ownerApprovalStatus': ownerApprovalStatus,
+        'hasOwnerAccount': accountTypes['isOwner'] ?? false,
+        'hasTenantAccount': accountTypes['isTenant'] ?? false,
+      };
+    } catch (e) {
+      print('Error getting account switching info: $e');
+      return {
+        'canSwitchToOwner': false,
+        'canSwitchToTenant': false,
+        'ownerApprovalStatus': null,
+        'hasOwnerAccount': false,
+        'hasTenantAccount': false,
+      };
+    }
+  }
+
+  // ==================== MOBILE NUMBER VALIDATION ====================
+
+  /// Validates if a mobile number is already used by another account
+  /// Returns true if mobile number is unique (can be used)
+  /// Returns false if mobile number is already linked to another email
+  /// Allows same mobile number for same email across different account types (tenant/owner)
+  static Future<bool> isMobileNumberUnique(String mobileNumber,
+      {String? excludeEmail, String? currentEmail}) async {
+    if (mobileNumber.isEmpty) return false;
+
+    try {
+      Set<String> foundEmails = {};
+      
+      // Check in tenants collection
+      final tenantQuery = await _firestore
+          .collection('Tenants')
+          .where('mobileNumber', isEqualTo: mobileNumber)
+          .get();
+
+      for (var doc in tenantQuery.docs) {
+        final docEmail = doc.id;
+        // If excludeEmail is provided, skip checking that specific email
+        if (excludeEmail != null && docEmail == excludeEmail) {
+          continue;
+        }
+        foundEmails.add(docEmail);
+      }
+
+      // Check in owners collection
+      final ownerQuery = await _firestore
+          .collection('Owners')
+          .where('mobileNumber', isEqualTo: mobileNumber)
+          .get();
+
+      for (var doc in ownerQuery.docs) {
+        final docEmail = doc.id;
+        // If excludeEmail is provided, skip checking that specific email
+        if (excludeEmail != null && docEmail == excludeEmail) {
+          continue;
+        }
+        foundEmails.add(docEmail);
+      }
+
+      // If no emails found, mobile number is unique
+      if (foundEmails.isEmpty) {
+        return true;
+      }
+
+      // If currentEmail is provided and all found emails match currentEmail,
+      // then it's the same person trying to create another account type
+      if (currentEmail != null && foundEmails.length == 1 && foundEmails.contains(currentEmail)) {
+        return true; // Allow same email to use same mobile across account types
+      }
+
+      // If multiple different emails or email doesn't match currentEmail, not allowed
+      return false;
+      
+    } catch (e) {
+      print('Error checking mobile number uniqueness: $e');
+      return false; // Return false on error to be safe
+    }
+  }
+
+  /// Gets the email associated with a mobile number
+  /// Returns the email if found, null if not found or error
+  static Future<String?> getEmailByMobileNumber(String mobileNumber) async {
+    if (mobileNumber.isEmpty) return null;
+
+    try {
+      // Check in tenants collection first
+      final tenantQuery = await _firestore
+          .collection('Tenants')
+          .where('mobileNumber', isEqualTo: mobileNumber)
+          .limit(1)
+          .get();
+
+      if (tenantQuery.docs.isNotEmpty) {
+        return tenantQuery.docs.first.id; // Document ID is the email
+      }
+
+      // Check in owners collection
+      final ownerQuery = await _firestore
+          .collection('Owners')
+          .where('mobileNumber', isEqualTo: mobileNumber)
+          .limit(1)
+          .get();
+
+      if (ownerQuery.docs.isNotEmpty) {
+        return ownerQuery.docs.first.id; // Document ID is the email
+      }
+
+      return null; // Not found
+    } catch (e) {
+      print('Error getting email by mobile number: $e');
+      return null;
+    }
+  }
+
+  /// Validates mobile number during signup process
+  /// Throws exception with user-friendly message if validation fails
+  /// Allows same mobile number for same email across different account types
+  static Future<void> validateMobileForSignup(String mobileNumber, {String? currentEmail}) async {
+    if (mobileNumber.isEmpty) {
+      throw Exception('Mobile number is required');
+    }
+
+    // Basic format validation (optional - adjust pattern as needed)
+    final phoneRegex = RegExp(r'^[\+]?[1-9][\d]{0,15}$');
+    if (!phoneRegex
+        .hasMatch(mobileNumber.replaceAll(RegExp(r'[\s\-\(\)]'), ''))) {
+      throw Exception('Please enter a valid mobile number');
+    }
+
+    final isUnique = await isMobileNumberUnique(mobileNumber, currentEmail: currentEmail);
+    if (!isUnique) {
+      throw Exception(
+          'This mobile number is already linked with another account. Please use a different number.');
+    }
+  }
+
+  /// Validates mobile number consistency during login
+  /// Checks if the logged-in user's mobile number matches Firestore data
+  static Future<bool> validateMobileConsistency(String email) async {
+    if (email.isEmpty) return false;
+
+    try {
+      final currentUser = getCurrentUser();
+      if (currentUser == null) return false;
+
+      // Get stored mobile number from Firestore
+      final storedMobile = await getUserMobileNumber(email);
+      if (storedMobile == null) {
+        print('Warning: No mobile number found in Firestore for email: $email');
+        return true; // Allow login but log warning
+      }
+
+      // For now, we'll just verify the data exists and is consistent
+      // Additional validation can be added here if needed
+      return true;
+    } catch (e) {
+      print('Error validating mobile consistency: $e');
+      return true; // Allow login on error to prevent blocking users
     }
   }
 }

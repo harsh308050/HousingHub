@@ -73,7 +73,10 @@ class _OwnerApprovalScreenState extends State<OwnerApprovalScreen> {
         elevation: 0,
         centerTitle: true,
         title: const Text('Owner Verification',
-            style: TextStyle(color: Colors.black87)),
+            style: TextStyle(
+                color: Colors.black87,
+                fontSize: 20,
+                fontWeight: FontWeight.bold)),
       ),
       body: email.isEmpty
           ? const Center(child: Text('Please sign in again.'))

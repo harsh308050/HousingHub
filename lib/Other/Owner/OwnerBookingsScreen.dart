@@ -822,8 +822,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
         );
 
         if (mounted) {
-          Models.showSuccessSnackBar(
-              context, 'Booking approved successfully!');
+          Models.showSuccessSnackBar(context, 'Booking approved successfully!');
         }
       } catch (e) {
         if (mounted) {
@@ -917,8 +916,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
         );
 
         if (mounted) {
-          Models.showSuccessSnackBar(
-              context, 'Booking marked as completed!');
+          Models.showSuccessSnackBar(context, 'Booking marked as completed!');
         }
       } catch (e) {
         if (mounted) {

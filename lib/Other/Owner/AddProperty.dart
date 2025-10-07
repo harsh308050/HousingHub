@@ -1392,7 +1392,7 @@ class _AddPropertyState extends State<AddProperty> {
             return AlertDialog(
               content: Row(
                 children: [
-                  CircularProgressIndicator(),
+                  CircularProgressIndicator(color: AppConfig.primaryColor),
                   SizedBox(width: 20),
                   Text("Adding property..."),
                 ],

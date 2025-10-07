@@ -3,6 +3,7 @@ import 'package:housinghub/Helper/Models.dart';
 import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Other/Owner/AddProperty.dart';
 import 'package:housinghub/Other/Owner/EditProperty.dart';
+import 'package:housinghub/Other/Owner/OwnerPropertyPreview.dart';
 import 'package:housinghub/Helper/API.dart';
 import 'package:housinghub/Helper/ShimmerHelper.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -158,6 +159,7 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
 
   Widget _buildPropertyList(List<Map<String, dynamic>> properties) {
     return RefreshIndicator(
+      color: AppConfig.primaryColor,
       onRefresh: _fetchProperties,
       child: properties.isEmpty
           ? Center(
@@ -283,21 +285,30 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
   }
 
   Widget _buildPropertyCard(Map<String, dynamic> property) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 6,
-            offset: Offset(0, 1),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => OwnerPropertyPreview(propertyData: property),
           ),
-        ],
-      ),
-      child: Column(
+        );
+      },
+      child: Container(
+        margin: EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              spreadRadius: 1,
+              blurRadius: 6,
+              offset: Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Property Image
@@ -456,6 +467,7 @@ class _OwnerPropertyTabState extends State<OwnerPropertyTab>
             ),
           ),
         ],
+      ),
       ),
     );
   }

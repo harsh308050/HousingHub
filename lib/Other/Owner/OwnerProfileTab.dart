@@ -7,6 +7,7 @@ import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Other/Owner/EditOwnerProfile.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import '../../Login/LoginScreen.dart';
 
 class OwnerProfileTab extends StatefulWidget {
   final User? user;
@@ -22,6 +23,7 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
   Map<String, dynamic>? _ownerData;
   bool _isLoading = false;
   bool _uploadingPhoto = false;
+  bool _checkingAccountStatus = false;
   final ImagePicker _picker = ImagePicker();
 
   @override
@@ -102,6 +104,49 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
       }
     }
     return initials.isEmpty ? '??' : initials;
+  }
+
+  // Account switching method - switch to tenant account
+  Future<void> _switchToTenantAccount() async {
+    if (widget.user?.email == null) return;
+
+    setState(() => _checkingAccountStatus = true);
+
+    try {
+      final switchingInfo =
+          await Api.getAccountSwitchingInfo(widget.user!.email!);
+
+      if (mounted) {
+        setState(() => _checkingAccountStatus = false);
+
+        if (switchingInfo['hasTenantAccount']) {
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            'TenantHomeScreen',
+            (route) => false,
+          );
+        } else {
+          // Navigate to login screen with tenant signup tab
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const LoginScreen(),
+              settings: RouteSettings(
+                arguments: {'preOpenTab': 'tenantSignup'},
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _checkingAccountStatus = false);
+        Models.showErrorSnackBar(
+          context,
+          'Failed to check tenant account: $e',
+        );
+      }
+    }
   }
 
   @override
@@ -303,6 +348,57 @@ class _OwnerProfileTabState extends State<OwnerProfileTab> {
                               style:
                                   TextStyle(fontSize: 18, color: Colors.white),
                             ),
+                          ),
+                          ElevatedButton(
+                            onPressed: _checkingAccountStatus
+                                ? null
+                                : _switchToTenantAccount,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              fixedSize: Size(width, height * 0.07),
+                              padding: EdgeInsets.symmetric(
+                                  vertical: height * 0.015),
+                              shape: RoundedRectangleBorder(
+                                side: BorderSide(
+                                  color: AppConfig.primaryColor,
+                                  width: 2.0,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              shadowColor: Colors.black.withOpacity(0),
+                            ),
+                            child: _checkingAccountStatus
+                                ? Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AppConfig.primaryColor,
+                                        ),
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Checking...',
+                                        style: TextStyle(
+                                            fontSize: 18,
+                                            color: AppConfig.primaryColor),
+                                      ),
+                                    ],
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        'Switch to Tenant Mode',
+                                        style: TextStyle(
+                                            fontSize: 18,
+                                            color: AppConfig.primaryColor),
+                                      ),
+                                    ],
+                                  ),
                           ),
                           ElevatedButton(
                             onPressed: () async {
