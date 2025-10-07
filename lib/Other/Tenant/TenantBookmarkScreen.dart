@@ -225,6 +225,22 @@ class _SavedCard extends StatelessWidget {
   const _SavedCard(
       {required this.data, required this.onOpen, required this.onToggleSave});
 
+  String _getFormattedPrice() {
+    final listingType = data['listingType'] ?? 'rent';
+    
+    if (listingType == 'sale') {
+      final salePrice = data['salePrice'] ?? data['price'] ?? '';
+      if (salePrice.toString().isEmpty) return '';
+      String priceValue = salePrice.toString().replaceAll('₹', '').replaceAll(',', '').trim();
+      return Models.formatIndianCurrency(priceValue);
+    } else {
+      final rentPrice = data['price'] ?? '';
+      if (rentPrice.toString().isEmpty) return '';
+      String priceValue = rentPrice.toString().replaceAll('₹', '').replaceAll('/month', '').replaceAll(',', '').trim();
+      return Models.formatIndianCurrency(priceValue);
+    }
+  }
+
   // Ratings removed
 
   @override
@@ -233,13 +249,14 @@ class _SavedCard extends StatelessWidget {
         ? data['images'][0]
         : data['imageUrl'] ?? '';
     final title = data['title']?.toString() ?? 'Property';
-    final price = data['price']?.toString() ?? '';
+    final formattedPrice = _getFormattedPrice();
     final city = data['city']?.toString();
     final address = data['address']?.toString();
     final location = [address, city]
         .whereType<String>()
         .where((e) => e.isNotEmpty)
         .join(', ');
+    final listingType = data['listingType'] ?? 'rent';
     // Ratings removed
     return GestureDetector(
       onTap: onOpen,
@@ -316,7 +333,9 @@ class _SavedCard extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 4),
-                  Text("₹ $price",
+                  Text(formattedPrice.isNotEmpty 
+                      ? "₹$formattedPrice${listingType == 'rent' ? '/month' : ''}"
+                      : "Price not available",
                       style: const TextStyle(
                           fontSize: 14, fontWeight: FontWeight.w500)),
                   const SizedBox(height: 4),
@@ -344,6 +363,22 @@ class _SavedListTile extends StatelessWidget {
   const _SavedListTile(
       {required this.data, required this.onOpen, required this.onToggleSave});
 
+  String _getFormattedPrice() {
+    final listingType = data['listingType'] ?? 'rent';
+    
+    if (listingType == 'sale') {
+      final salePrice = data['salePrice'] ?? data['price'] ?? '';
+      if (salePrice.toString().isEmpty) return '';
+      String priceValue = salePrice.toString().replaceAll('₹', '').replaceAll(',', '').trim();
+      return Models.formatIndianCurrency(priceValue);
+    } else {
+      final rentPrice = data['price'] ?? '';
+      if (rentPrice.toString().isEmpty) return '';
+      String priceValue = rentPrice.toString().replaceAll('₹', '').replaceAll('/month', '').replaceAll(',', '').trim();
+      return Models.formatIndianCurrency(priceValue);
+    }
+  }
+
   // Ratings removed
 
   @override
@@ -352,13 +387,14 @@ class _SavedListTile extends StatelessWidget {
         ? data['images'][0]
         : data['imageUrl'] ?? '';
     final title = data['title']?.toString() ?? 'Property';
-    final price = data['price']?.toString() ?? '';
+    final formattedPrice = _getFormattedPrice();
     final city = data['city']?.toString();
     final address = data['address']?.toString();
     final location = [address, city]
         .whereType<String>()
         .where((e) => e.isNotEmpty)
         .join(', ');
+    final listingType = data['listingType'] ?? 'rent';
     // Ratings removed
     return InkWell(
       onTap: onOpen,
@@ -437,7 +473,9 @@ class _SavedListTile extends StatelessWidget {
                         style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 4),
-                    Text("₹ $price",
+                    Text(formattedPrice.isNotEmpty 
+                        ? "₹$formattedPrice${listingType == 'rent' ? '/month' : ''}"
+                        : "Price not available",
                         style: const TextStyle(
                             fontSize: 14, fontWeight: FontWeight.w500)),
                     const SizedBox(height: 4),
