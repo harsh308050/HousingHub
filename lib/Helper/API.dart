@@ -43,7 +43,8 @@ class Property {
   // New fields for sell properties extension
   final String listingType; // "rent" or "sale"
   final String? salePrice; // for sale properties
-  final String? furnishingStatus; // "Furnished", "Semi-Furnished", "Unfurnished"
+  final String?
+      furnishingStatus; // "Furnished", "Semi-Furnished", "Unfurnished"
   final int? propertyAge; // in years
   final String? ownershipType; // "Freehold", "Leasehold", "Co-operative"
 
@@ -1756,10 +1757,11 @@ class Api {
               if (propertyCity.isNotEmpty && propertyCity == currentCity) {
                 // Apply listing type filter if specified
                 if (listingType != null && listingType != 'all') {
-                  String propertyListingType = data['listingType']?.toString() ?? 'rent';
+                  String propertyListingType =
+                      data['listingType']?.toString() ?? 'rent';
                   if (propertyListingType != listingType) continue;
                 }
-                
+
                 // Create property object with owner ID
                 Property property =
                     Property.fromFirestore(propertyDoc, ownerEmail);
@@ -2404,8 +2406,9 @@ class Api {
   static Future<String> uploadChatAttachment(File file,
       {String folder = 'chat_attachments'}) async {
     try {
-      final cloudinary =
-          CloudinaryPublic('debf09qz0', 'HousingHub', cache: false);
+      final cloudinary = CloudinaryPublic(
+          ApiKeys.cloudinaryCloudName, ApiKeys.cloudinaryUploadPreset,
+          cache: false);
       final response = await cloudinary.uploadFile(
         CloudinaryFile.fromFile(
           file.path,
@@ -3210,6 +3213,7 @@ class Api {
       // Create notification for owner
       await createBookingNotification(
         recipientEmail: ownerEmail,
+        senderEmail: tenantEmail, // Add sender email (tenant)
         type: 'booking_request',
         message:
             'New booking request from ${tenantData['firstName']} ${tenantData['lastName']} for ${propertyData['title']}',
@@ -3429,6 +3433,7 @@ class Api {
 
       await createBookingNotification(
         recipientEmail: tenantEmail,
+        senderEmail: ownerEmail, // Add sender email (owner)
         type: notificationType,
         message: notificationMessage,
         bookingId: bookingId,
@@ -3665,6 +3670,7 @@ class Api {
       // Create notification for owner
       await createBookingNotification(
         recipientEmail: ownerEmail,
+        senderEmail: tenantEmail, // Add sender email (tenant)
         type: 'booking_cancelled',
         message:
             'Booking has been cancelled by tenant. ${cancellationReason ?? ''}',
@@ -3890,12 +3896,20 @@ class Api {
     required String type,
     required String message,
     required String bookingId,
+    String? senderEmail, // Optional sender email for proper ID structure
   }) async {
     try {
-      final notificationId = const Uuid().v4();
+      // Create notification ID following the same pattern as chat notifications
+      // Format: senderEmail_recipientEmail_timestamp
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final sender =
+          senderEmail ?? 'system'; // Use 'system' if no sender specified
+      final notificationId = '${sender}_${recipientEmail}_$timestamp';
+
       final notificationData = {
         'notificationId': notificationId,
         'recipientEmail': recipientEmail,
+        'senderEmail': sender,
         'type': type,
         'message': message,
         'bookingId': bookingId,
@@ -4099,7 +4113,7 @@ class Api {
 
     try {
       Set<String> foundEmails = {};
-      
+
       // Check in tenants collection
       final tenantQuery = await _firestore
           .collection('Tenants')
@@ -4137,13 +4151,14 @@ class Api {
 
       // If currentEmail is provided and all found emails match currentEmail,
       // then it's the same person trying to create another account type
-      if (currentEmail != null && foundEmails.length == 1 && foundEmails.contains(currentEmail)) {
+      if (currentEmail != null &&
+          foundEmails.length == 1 &&
+          foundEmails.contains(currentEmail)) {
         return true; // Allow same email to use same mobile across account types
       }
 
       // If multiple different emails or email doesn't match currentEmail, not allowed
       return false;
-      
     } catch (e) {
       print('Error checking mobile number uniqueness: $e');
       return false; // Return false on error to be safe
@@ -4188,7 +4203,8 @@ class Api {
   /// Validates mobile number during signup process
   /// Throws exception with user-friendly message if validation fails
   /// Allows same mobile number for same email across different account types
-  static Future<void> validateMobileForSignup(String mobileNumber, {String? currentEmail}) async {
+  static Future<void> validateMobileForSignup(String mobileNumber,
+      {String? currentEmail}) async {
     if (mobileNumber.isEmpty) {
       throw Exception('Mobile number is required');
     }
@@ -4200,7 +4216,8 @@ class Api {
       throw Exception('Please enter a valid mobile number');
     }
 
-    final isUnique = await isMobileNumberUnique(mobileNumber, currentEmail: currentEmail);
+    final isUnique =
+        await isMobileNumberUnique(mobileNumber, currentEmail: currentEmail);
     if (!isUnique) {
       throw Exception(
           'This mobile number is already linked with another account. Please use a different number.');
@@ -4230,5 +4247,107 @@ class Api {
       print('Error validating mobile consistency: $e');
       return true; // Allow login on error to prevent blocking users
     }
+  }
+
+  // ============================================================================
+  // BANNER MANAGEMENT
+  // ============================================================================
+
+  /// Fetch all active banners ordered by their 'order' field
+  static Future<List<Map<String, dynamic>>> getActiveBanners() async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('Banners')
+          .where('isActive', isEqualTo: true)
+          .orderBy('order')
+          .get();
+
+      return querySnapshot.docs
+          .map((doc) => {
+                'id': doc.id,
+                ...doc.data(),
+              })
+          .toList();
+    } catch (e) {
+      print('Error fetching active banners: $e');
+      return [];
+    }
+  }
+
+  /// Fetch all banners (active and inactive)
+  static Future<List<Map<String, dynamic>>> getAllBanners() async {
+    try {
+      final querySnapshot =
+          await _firestore.collection('Banners').orderBy('order').get();
+
+      return querySnapshot.docs
+          .map((doc) => {
+                'id': doc.id,
+                ...doc.data(),
+              })
+          .toList();
+    } catch (e) {
+      print('Error fetching all banners: $e');
+      return [];
+    }
+  }
+
+  /// Stream of active banners for real-time updates
+  // Get single active banner stream
+  static Stream<Map<String, dynamic>?> getActiveBannerStream() {
+    return _firestore.collection('Banners').snapshots().handleError((error) {
+      print('Error fetching banner stream: $error');
+    }).map((snapshot) {
+      print('Banners snapshot received: ${snapshot.docs.length} documents');
+
+      // Filter active banners
+      final activeBanners =
+          snapshot.docs.where((doc) => doc.data()['isActive'] == true).toList();
+
+      if (activeBanners.isEmpty) {
+        print('No active banners found');
+        return null;
+      }
+
+      // Return the first active banner
+      final bannerDoc = activeBanners.first;
+      final data = bannerDoc.data();
+      data['id'] = bannerDoc.id;
+
+      print('Active banner: ${data['title']}');
+      return data;
+    });
+  }
+
+  // ==================== App Control Methods ====================
+
+  /// Check if app is under maintenance
+  static Future<bool> isAppUnderMaintenance() async {
+    try {
+      final docSnapshot =
+          await _firestore.collection('AppControl').doc('Application').get();
+
+      if (!docSnapshot.exists) {
+        return false; // Default to not under maintenance if doc doesn't exist
+      }
+
+      final data = docSnapshot.data();
+      return data?['UnderMaintenance'] ?? false;
+    } catch (e) {
+      print('Error checking maintenance status: $e');
+      return false; // Default to not under maintenance on error
+    }
+  }
+
+  /// Stream to listen for maintenance status changes in real-time
+  static Stream<bool> maintenanceStatusStream() {
+    return _firestore
+        .collection('AppControl')
+        .doc('Application')
+        .snapshots()
+        .map((snapshot) {
+      if (!snapshot.exists) return false;
+      return snapshot.data()?['UnderMaintenance'] ?? false;
+    });
   }
 }

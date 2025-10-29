@@ -8,6 +8,7 @@ import 'package:housinghub/Helper/Models.dart';
 import 'package:housinghub/Helper/ShimmerHelper.dart';
 import 'package:housinghub/Helper/LocationResolver.dart';
 import 'package:housinghub/config/AppConfig.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'TenantPropertyDetail.dart';
 import 'TenantSearchScreen.dart';
 import 'TenantBookmarkScreen.dart';
@@ -362,6 +363,8 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
   // Listing type filter
   String _listingTypeFilter =
       'all'; // 'rent', 'sale', or 'all' - default to show all properties
+
+  // Banner state - no need to store it since StreamBuilder handles it
 
   @override
   void initState() {
@@ -815,7 +818,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                 ),
               ),
 
-              // Promotional Banner
+              // Dynamic Promotional Banner from Firestore - Single Active Banner
               Container(
                 margin: EdgeInsets.symmetric(vertical: height * 0.01),
                 height: height * 0.18,
@@ -825,79 +828,107 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: FutureBuilder<bool>(
-                    future: _preloadBannerImage(),
+                  child: StreamBuilder<Map<String, dynamic>?>(
+                    stream: Api.getActiveBannerStream(),
                     builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.done &&
-                          snapshot.hasData &&
-                          snapshot.data == true) {
-                        // Image is preloaded and ready - show full banner
-                        return Container(
-                          decoration: BoxDecoration(
-                            image: DecorationImage(
-                              image: NetworkImage(
-                                  'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg'),
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return ShimmerHelper.bannerShimmer(
+                            height: height * 0.18);
+                      }
+
+                      if (snapshot.hasError) {
+                        print('Error loading banner: ${snapshot.error}');
+                        return _buildPlaceholderBanner(width);
+                      }
+
+                      if (!snapshot.hasData || snapshot.data == null) {
+                        print('No active banner found');
+                        return _buildPlaceholderBanner(width);
+                      }
+
+                      final banner = snapshot.data!;
+                      final imageUrl = banner['imageUrl'] ?? '';
+                      final title = banner['title'] ?? 'Welcome';
+                      final subtitle = banner['subtitle'] ?? '';
+
+                      return GestureDetector(
+                        onTap: () =>
+                            _handleBannerTap(banner['link'] as String?),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // Banner Image
+                            Image.network(
+                              imageUrl,
                               fit: BoxFit.cover,
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Container(
+                                  color: Colors.grey[300],
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                );
+                              },
+                              errorBuilder: (context, error, stackTrace) {
+                                print('Error loading banner image: $error');
+                                return _buildPlaceholderBanner(width);
+                              },
                             ),
-                          ),
-                          child: Stack(
-                            children: [
-                              // Gradient overlay at bottom
-                              Positioned(
-                                bottom: 0,
-                                left: 0,
-                                right: 0,
-                                height: height * 0.15,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.vertical(
-                                      bottom: Radius.circular(12),
-                                    ),
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Colors.transparent,
-                                        Colors.black,
-                                      ],
-                                    ),
+                            // Gradient overlay at bottom
+                            Positioned(
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              height: height * 0.15,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.vertical(
+                                    bottom: Radius.circular(12),
+                                  ),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.transparent,
+                                      Colors.black.withOpacity(0.7),
+                                    ],
                                   ),
                                 ),
                               ),
-                              // Text overlay
-                              Positioned(
-                                bottom: 8,
-                                left: 16,
-                                right: 16,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Get Upto 50% Off',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 20,
-                                      ),
+                            ),
+                            // Text overlay
+                            Positioned(
+                              bottom: 16,
+                              left: 16,
+                              right: 16,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 20,
                                     ),
+                                  ),
+                                  if (subtitle.isNotEmpty) SizedBox(height: 4),
+                                  if (subtitle.isNotEmpty)
                                     Text(
-                                      'On your first month\'s rent',
+                                      subtitle,
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontSize: 14,
                                       ),
                                     ),
-                                  ],
-                                ),
+                                ],
                               ),
-                            ],
-                          ),
-                        );
-                      } else {
-                        // Still loading or error - show shimmer
-                        return ShimmerHelper.bannerShimmer(
-                            height: height * 0.18);
-                      }
+                            ),
+                          ],
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -1483,15 +1514,44 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
     }
   }
 
-  // Method to preload banner image
-  Future<bool> _preloadBannerImage() async {
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  // Build placeholder banner when no active banner is available
+  Widget _buildPlaceholderBanner(double width) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF6A11CB), Color(0xFF2575FC)],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Center(
+        child: Text(
+          'Find Your Dream Home',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Handle banner tap to open link
+  Future<void> _handleBannerTap(String? link) async {
+    if (link == null || link.trim().isEmpty) return;
+
     try {
-      final imageProvider = NetworkImage(
-          'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg');
-      await precacheImage(imageProvider, context);
-      return true;
+      final Uri url = Uri.parse(link);
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      }
     } catch (e) {
-      return false;
+      print('Error launching banner URL: $e');
     }
   }
 }

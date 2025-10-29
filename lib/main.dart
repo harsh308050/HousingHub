@@ -5,11 +5,13 @@ import 'package:housinghub/Other/Owner/OwnerHomeScreen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:housinghub/firebase_options.dart';
 import 'package:housinghub/config/AppConfig.dart';
+import 'package:housinghub/config/ApiKeys.dart';
 import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'Other/Tenant/TenantHomeScreen.dart';
 import 'Other/Notification/NotificationScreen.dart';
 import 'Other/Owner/OwnerApprovalScreen.dart';
+import 'Other/UnderMaintenanceScreen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,9 +21,14 @@ void main() async {
     mapsImplementation.useAndroidViewSurface = true;
   }
 
+  // Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Initialize API keys from Firestore
+  await ApiKeys.initialize();
+
   runApp(MyApp());
 }
 
@@ -56,7 +63,8 @@ class _MyAppState extends State<MyApp> {
         'OwnerHomeScreen': (context) => OwnerHomeScreen(),
         'OwnerApprovalScreen': (context) => const OwnerApprovalScreen(),
         'TenantHomeScreen': (context) => TenantHomeScreen(),
-        'NotificationScreen': (context) => NotificationScreen()
+        'NotificationScreen': (context) => NotificationScreen(),
+        'UnderMaintenanceScreen': (context) => const UnderMaintenanceScreen(),
       },
     );
   }
