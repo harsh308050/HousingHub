@@ -1193,7 +1193,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                 child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   stream: Api.streamRecentlyViewedProperties(
                     FirebaseAuth.instance.currentUser?.email ?? '',
-                    limit: 5,
+                    limit: 10, // Fetch more to account for deleted ones
                   ),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
@@ -1238,23 +1238,56 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                       );
                     }
 
-                    return ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: docs.length,
-                      itemBuilder: (context, index) {
-                        final data = docs[index].data();
-                        final ownerId = data['ownerId'] as String? ?? '';
-                        final property =
-                            Property.fromFirestore(docs[index], ownerId);
-                        return Padding(
-                          padding: EdgeInsets.only(
-                            right: index < docs.length - 1 ? 12 : 0,
-                          ),
-                          child: _buildPropertyCardFromProperty(
-                            property: property,
-                            width: width * 0.6,
-                            height: height * 0.26,
-                          ),
+                    // Use FutureBuilder to validate properties exist
+                    return FutureBuilder<List<Property>>(
+                      future: _validateRecentlyViewedProperties(docs),
+                      builder: (context, validationSnapshot) {
+                        if (validationSnapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return Center(
+                            child: ShimmerHelper.propertyCardShimmer(),
+                          );
+                        }
+
+                        final validProperties = validationSnapshot.data ?? [];
+
+                        if (validProperties.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.history,
+                                    color: Colors.grey[400], size: 32),
+                                SizedBox(height: 8),
+                                Text(
+                                  'No recently viewed properties',
+                                  style: TextStyle(color: Colors.grey[600]),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        return ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: validProperties.length > 5
+                              ? 5
+                              : validProperties.length, // Show max 5
+                          itemBuilder: (context, index) {
+                            final property = validProperties[index];
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                right: index < validProperties.length - 1
+                                    ? 12
+                                    : 0,
+                              ),
+                              child: _buildPropertyCardFromProperty(
+                                property: property,
+                                width: width * 0.6,
+                                height: height * 0.26,
+                              ),
+                            );
+                          },
                         );
                       },
                     );
@@ -1517,6 +1550,59 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
   @override
   void dispose() {
     super.dispose();
+  }
+
+  // Validate recently viewed properties to filter out deleted ones
+  Future<List<Property>> _validateRecentlyViewedProperties(
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) async {
+    List<Property> validProperties = [];
+
+    for (var doc in docs) {
+      try {
+        final data = doc.data();
+        final propertyId = data['id'] ?? doc.id;
+        final ownerEmail = data['ownerEmail'] as String?;
+        final ownerId = data['ownerId'] as String? ?? '';
+
+        // Skip if no owner email
+        if (ownerEmail == null || ownerEmail.isEmpty) {
+          print('Skipping property $propertyId - no owner email');
+          continue;
+        }
+
+        // Check if property still exists in Firestore
+        final propertyExists =
+            await Api.getPropertyById(ownerEmail, propertyId);
+
+        if (propertyExists != null) {
+          // Property still exists, add to valid list
+          final property = Property.fromFirestore(doc, ownerId);
+          validProperties.add(property);
+        } else {
+          print(
+              'Property $propertyId by $ownerEmail has been deleted - removing from recently viewed');
+          // Optionally: Remove from recently viewed collection
+          _removeDeletedPropertyFromRecentViews(doc.reference);
+        }
+      } catch (e) {
+        print('Error validating property: $e');
+        // On error, skip this property
+        continue;
+      }
+    }
+
+    return validProperties;
+  }
+
+  // Remove deleted property from tenant's recent views
+  Future<void> _removeDeletedPropertyFromRecentViews(
+      DocumentReference docRef) async {
+    try {
+      await docRef.delete();
+      print('Removed deleted property from recent views');
+    } catch (e) {
+      print('Error removing deleted property from recent views: $e');
+    }
   }
 
   // Build placeholder banner when no active banner is available

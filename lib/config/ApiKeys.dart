@@ -6,7 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// Never commit secret keys or private keys to source control.
 class ApiKeys {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  
+
   // Cached values from Firestore
   static Map<String, dynamic>? _cachedKeys;
   static bool _isInitialized = false;
@@ -17,7 +17,8 @@ class ApiKeys {
   static const String _fallbackCloudinaryCloudName = 'debf09qz0';
   static const String _fallbackCloudinaryUploadPreset = 'HousingHub';
   static const String _fallbackRazorpayKey = 'rzp_test_1DP5mmOlF5G5ag';
-  static const String _fallbackGoogleMapsApiKey = 'AIzaSyBOJn7KGIWw4rUtoTaTQDg56hgXFlBI5ME';
+  static const String _fallbackGoogleMapsApiKey =
+      'AIzaSyBOJn7KGIWw4rUtoTaTQDg56hgXFlBI5ME';
 
   /// Initialize and fetch API keys from Firestore
   /// Should be called once during app startup
@@ -26,7 +27,7 @@ class ApiKeys {
 
     try {
       print('🔄 Fetching API keys from Firestore...');
-      
+
       final docSnapshot = await _firestore
           .collection('AppControl')
           .doc('ApiKeys')
@@ -45,7 +46,8 @@ class ApiKeys {
         print('   - Razorpay: ${razorpayKey.isNotEmpty ? "✓" : "✗"}');
         print('   - Google Maps: ${googleMapsApiKey.isNotEmpty ? "✓" : "✗"}');
       } else {
-        print('⚠️  ApiKeys document not found in Firestore, using fallback values');
+        print(
+            '⚠️  ApiKeys document not found in Firestore, using fallback values');
         _isInitialized = true;
       }
     } catch (e) {

@@ -18,6 +18,57 @@ class _TenantBookmarksTabState extends State<TenantBookmarksTab> {
   User? get _user => FirebaseAuth.instance.currentUser;
   bool _gridMode = true;
 
+  // Validate saved properties to filter out deleted ones
+  Future<List<Map<String, dynamic>>> _validateSavedProperties(
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) async {
+    List<Map<String, dynamic>> validProperties = [];
+
+    for (var doc in docs) {
+      try {
+        final data = doc.data();
+        final propertyId = data['id'] ?? doc.id;
+        final ownerEmail = data['ownerEmail'] as String?;
+
+        // Skip if no owner email
+        if (ownerEmail == null || ownerEmail.isEmpty) {
+          print('Skipping saved property $propertyId - no owner email');
+          continue;
+        }
+
+        // Check if property still exists in Firestore
+        final propertyExists =
+            await Api.getPropertyById(ownerEmail, propertyId);
+
+        if (propertyExists != null) {
+          // Property still exists, add to valid list
+          validProperties.add(data);
+        } else {
+          print(
+              'Saved property $propertyId by $ownerEmail has been deleted - removing from saved properties');
+          // Remove from saved properties collection
+          _removeDeletedPropertyFromSaved(doc.reference);
+        }
+      } catch (e) {
+        print('Error validating saved property: $e');
+        // On error, skip this property
+        continue;
+      }
+    }
+
+    return validProperties;
+  }
+
+  // Remove deleted property from tenant's saved properties
+  Future<void> _removeDeletedPropertyFromSaved(
+      DocumentReference docRef) async {
+    try {
+      await docRef.delete();
+      print('Removed deleted property from saved properties');
+    } catch (e) {
+      print('Error removing deleted property from saved properties: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_user?.email == null) {
@@ -58,108 +109,119 @@ class _TenantBookmarksTabState extends State<TenantBookmarksTab> {
         final waiting = snapshot.connectionState == ConnectionState.waiting;
         final error = snapshot.hasError ? snapshot.error?.toString() : null;
         final docs = snapshot.data?.docs ?? [];
-        return Scaffold(
-          backgroundColor: Colors.white,
-          appBar: AppBar(
-            elevation: 0,
-            centerTitle: true,
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black,
-            title: const Text('Saved Listings',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 20)),
-            leading: Navigator.canPop(context)
-                ? IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => Navigator.pop(context),
-                  )
-                : null,
-          ),
-          body: waiting
-              ? ShimmerHelper.savedListingsShimmer(gridMode: _gridMode)
-              : error != null
-                  ? Center(child: Text('Error: $error'))
-                  : Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+
+        // Validate properties exist before displaying
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: waiting ? null : _validateSavedProperties(docs),
+          builder: (context, validationSnapshot) {
+            final validProperties = validationSnapshot.data ?? [];
+            final isValidating =
+                !waiting && validationSnapshot.connectionState == ConnectionState.waiting;
+
+            return Scaffold(
+              backgroundColor: Colors.white,
+              appBar: AppBar(
+                elevation: 0,
+                centerTitle: true,
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
+                title: const Text('Saved Listings',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 20)),
+                leading: Navigator.canPop(context)
+                    ? IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: () => Navigator.pop(context),
+                      )
+                    : null,
+              ),
+              body: waiting || isValidating
+                  ? ShimmerHelper.savedListingsShimmer(gridMode: _gridMode)
+                  : error != null
+                      ? Center(child: Text('Error: $error'))
+                      : Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('${docs.length} saved listings',
-                                  style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.black87)),
-                              const Spacer(),
-                              _ViewToggle(
-                                grid: true,
-                                selected: _gridMode,
-                                onTap: () => setState(() => _gridMode = true),
+                              Row(
+                                children: [
+                                  Text('${validProperties.length} saved listings',
+                                      style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.black87)),
+                                  const Spacer(),
+                                  _ViewToggle(
+                                    grid: true,
+                                    selected: _gridMode,
+                                    onTap: () => setState(() => _gridMode = true),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _ViewToggle(
+                                    grid: false,
+                                    selected: !_gridMode,
+                                    onTap: () => setState(() => _gridMode = false),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 8),
-                              _ViewToggle(
-                                grid: false,
-                                selected: !_gridMode,
-                                onTap: () => setState(() => _gridMode = false),
-                              ),
+                              const SizedBox(height: 12),
+                              if (validProperties.isEmpty)
+                                Expanded(
+                                  child: Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.bookmark_border,
+                                            size: 72, color: Colors.grey[350]),
+                                        const SizedBox(height: 16),
+                                        const Text('No saved properties yet',
+                                            style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 8),
+                                        Text('Properties you save will appear here',
+                                            style:
+                                                TextStyle(color: Colors.grey[600])),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                              else
+                                Expanded(
+                                  child: _gridMode
+                                      ? GridView.builder(
+                                          padding:
+                                              const EdgeInsets.only(bottom: 16),
+                                          gridDelegate:
+                                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount: 2,
+                                            mainAxisSpacing: 16,
+                                            crossAxisSpacing: 12,
+                                            childAspectRatio: 0.70,
+                                          ),
+                                          itemCount: validProperties.length,
+                                          itemBuilder: (c, i) => _SavedCard(
+                                            data: validProperties[i],
+                                            onOpen: () => _open(validProperties[i]),
+                                            onToggleSave: () => _removeValidated(validProperties[i]),
+                                          ),
+                                        )
+                                      : ListView.builder(
+                                          padding:
+                                              const EdgeInsets.only(bottom: 16),
+                                          itemCount: validProperties.length,
+                                          itemBuilder: (c, i) => _SavedListTile(
+                                            data: validProperties[i],
+                                            onOpen: () => _open(validProperties[i]),
+                                            onToggleSave: () => _removeValidated(validProperties[i]),
+                                          ),
+                                        ),
+                                ),
                             ],
                           ),
-                          const SizedBox(height: 12),
-                          if (docs.isEmpty)
-                            Expanded(
-                              child: Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.bookmark_border,
-                                        size: 72, color: Colors.grey[350]),
-                                    const SizedBox(height: 16),
-                                    const Text('No saved properties yet',
-                                        style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold)),
-                                    const SizedBox(height: 8),
-                                    Text('Properties you save will appear here',
-                                        style:
-                                            TextStyle(color: Colors.grey[600])),
-                                  ],
-                                ),
-                              ),
-                            )
-                          else
-                            Expanded(
-                              child: _gridMode
-                                  ? GridView.builder(
-                                      padding:
-                                          const EdgeInsets.only(bottom: 16),
-                                      gridDelegate:
-                                          const SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 2,
-                                        mainAxisSpacing: 16,
-                                        crossAxisSpacing: 12,
-                                        childAspectRatio: 0.70,
-                                      ),
-                                      itemCount: docs.length,
-                                      itemBuilder: (c, i) => _SavedCard(
-                                        data: docs[i].data(),
-                                        onOpen: () => _open(docs[i].data()),
-                                        onToggleSave: () => _remove(docs[i]),
-                                      ),
-                                    )
-                                  : ListView.builder(
-                                      padding:
-                                          const EdgeInsets.only(bottom: 16),
-                                      itemCount: docs.length,
-                                      itemBuilder: (c, i) => _SavedListTile(
-                                        data: docs[i].data(),
-                                        onOpen: () => _open(docs[i].data()),
-                                        onToggleSave: () => _remove(docs[i]),
-                                      ),
-                                    ),
-                            ),
-                        ],
-                      ),
-                    ),
+                        ),
+            );
+          },
         );
       },
     );
@@ -183,13 +245,19 @@ class _TenantBookmarksTabState extends State<TenantBookmarksTab> {
     );
   }
 
-  Future<void> _remove(QueryDocumentSnapshot<Map<String, dynamic>> doc) async {
+  Future<void> _removeValidated(Map<String, dynamic> data) async {
+    final tenantEmail = _user?.email;
+    if (tenantEmail == null) return;
+
+    final propertyId = data['id']?.toString();
+    if (propertyId == null || propertyId.isEmpty) return;
+
     try {
       await Api.removeSavedProperty(
-          tenantEmail: _user!.email!, propertyId: doc['id']);
+          tenantEmail: tenantEmail, propertyId: propertyId);
     } catch (e) {
       if (!mounted) return;
-    Models.showErrorSnackBar(context, 'Error: $e');
+      Models.showErrorSnackBar(context, 'Error removing property: $e');
     }
   }
 }

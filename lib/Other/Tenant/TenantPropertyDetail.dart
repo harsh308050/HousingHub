@@ -42,6 +42,8 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
   Future<void>? _initializeVideoFuture;
   // Availability state
   bool _isUnavailable = false;
+  bool _isDeleted = false; // NEW: Track if property is deleted
+  bool _isCheckingProperty = true; // NEW: Track if checking property existence
   // Note: we don't currently render a loading state for availability check
 
   // Sample images for the thumbnail gallery
@@ -68,6 +70,9 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
 
+    // Check if property exists first
+    _checkPropertyExists();
+
     // Load property data
     _loadPropertyData();
     _checkAvailability();
@@ -80,6 +85,37 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
         setState(() {});
       }
     });
+  }
+
+  Future<void> _checkPropertyExists() async {
+    try {
+      final propertyId = widget.propertyData?['id'] ?? widget.propertyId;
+      final ownerEmail = widget.propertyData?['ownerEmail']?.toString();
+
+      if (propertyId == null || ownerEmail == null || ownerEmail.isEmpty) {
+        setState(() {
+          _isCheckingProperty = false;
+        });
+        return;
+      }
+
+      // Check if property still exists in Firestore
+      final propertyData = await Api.getPropertyById(ownerEmail, propertyId);
+
+      if (mounted) {
+        setState(() {
+          _isDeleted = (propertyData == null);
+          _isCheckingProperty = false;
+        });
+      }
+    } catch (e) {
+      print('Error checking if property exists: $e');
+      if (mounted) {
+        setState(() {
+          _isCheckingProperty = false;
+        });
+      }
+    }
   }
 
   Future<void> _checkIfSaved() async {
@@ -334,6 +370,91 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
 
   @override
   Widget build(BuildContext context) {
+    // Show loading screen while checking if property exists
+    if (_isCheckingProperty) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('Property Details'),
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(AppConfig.primaryColor),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Loading property details...',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Show "Property Deleted" screen if property no longer exists
+    if (_isDeleted) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('Property Not Available'),
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+        ),
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.home_work_outlined,
+                  size: 80,
+                  color: Colors.grey[400],
+                ),
+                SizedBox(height: 24),
+                Text(
+                  'Property No Longer Available',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'This property has been removed by the owner and is no longer available for viewing or booking.',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 32),
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(Icons.arrow_back),
+                  label: Text('Back to Home'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppConfig.primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     // Debug logging to understand the issue
     print('=== TenantPropertyDetail Debug ===');
     print('Property ID: ${widget.propertyId}');
