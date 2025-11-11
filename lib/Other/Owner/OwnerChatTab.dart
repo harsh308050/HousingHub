@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:housinghub/Helper/API.dart';
+import 'package:housinghub/Helper/Models.dart';
 import 'package:housinghub/Helper/ShimmerHelper.dart';
 import 'package:housinghub/Other/Chat/ChatScreen.dart';
 
@@ -152,6 +153,13 @@ class _OwnerChatTabState extends State<OwnerChatTab> {
                             otherEmail: other,
                             profilePicture: profilePicture,
                             onTap: () {
+                              // Prevent opening chat with yourself
+                              if (me.toLowerCase().trim() == other.toLowerCase().trim()) {
+                                Models.showWarningSnackBar(
+                                    context, 'Cannot chat with yourself');
+                                return;
+                              }
+                              
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(

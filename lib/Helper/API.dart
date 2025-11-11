@@ -781,9 +781,6 @@ class Api {
     }
   }
 
-  // Store/update FCM device token for a user (used by server to send pushes)
-  // Notifications removed: saveFcmToken no longer needed.
-
   // Create a new owner in Firestore if not exists
   static Future<void> createOwnerIfNotExists(String mobileNumber,
       String fullName, String email, String city, String state) async {
@@ -2288,6 +2285,11 @@ class Api {
     String? text,
     String? attachmentUrl,
   }) async {
+    // Prevent users from messaging themselves
+    if (senderEmail.toLowerCase().trim() == receiverEmail.toLowerCase().trim()) {
+      throw Exception('You cannot send messages to yourself');
+    }
+
     final roomId = chatRoomIdFor(senderEmail, receiverEmail);
     await _ensureRoom(senderEmail, receiverEmail);
 
@@ -3108,6 +3110,11 @@ class Api {
     String? paymentStatus,
   }) async {
     try {
+      // Prevent users from booking their own properties
+      if (tenantEmail.toLowerCase().trim() == ownerEmail.toLowerCase().trim()) {
+        throw Exception('You cannot book your own property');
+      }
+
       final bookingId = const Uuid().v4();
 
       // Resolve owner details (name and mobile) from provided args, propertyData, or owner profile fallback

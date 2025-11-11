@@ -44,6 +44,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
   bool _isUnavailable = false;
   bool _isDeleted = false; // NEW: Track if property is deleted
   bool _isCheckingProperty = true; // NEW: Track if checking property existence
+  bool _isOwnProperty = false; // Track if viewing own property
   // Note: we don't currently render a loading state for availability check
 
   // Sample images for the thumbnail gallery
@@ -73,6 +74,9 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
     // Check if property exists first
     _checkPropertyExists();
 
+    // Check if viewing own property
+    _checkIfOwnProperty();
+
     // Load property data
     _loadPropertyData();
     _checkAvailability();
@@ -85,6 +89,18 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
         setState(() {});
       }
     });
+  }
+
+  void _checkIfOwnProperty() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final ownerEmail = widget.propertyData?['ownerEmail']?.toString();
+    
+    if (currentUser != null && currentUser.email != null && ownerEmail != null) {
+      setState(() {
+        _isOwnProperty = currentUser.email!.toLowerCase().trim() == 
+                         ownerEmail.toLowerCase().trim();
+      });
+    }
   }
 
   Future<void> _checkPropertyExists() async {
@@ -1077,6 +1093,14 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                               context, 'Sign in to chat or owner info missing');
                           return;
                         }
+                        
+                        // Prevent users from messaging themselves
+                        if (_isOwnProperty || me.toLowerCase().trim() == ownerEmail.toLowerCase().trim()) {
+                          Models.showWarningSnackBar(
+                              context, 'You cannot message your own property');
+                          return;
+                        }
+                        
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -1090,15 +1114,21 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                         );
                       },
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: AppConfig.primaryColor,
-                        side: BorderSide(color: AppConfig.primaryColor),
+                        foregroundColor: _isOwnProperty 
+                            ? Colors.grey 
+                            : AppConfig.primaryColor,
+                        side: BorderSide(
+                          color: _isOwnProperty 
+                              ? Colors.grey 
+                              : AppConfig.primaryColor
+                        ),
                         padding: EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
                       child: Text(
-                        'Chat Now',
+                        _isOwnProperty ? 'Your Property' : 'Chat Now',
                         style: TextStyle(fontSize: 16),
                       ),
                     ),
@@ -1111,6 +1141,13 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                     flex: 2,
                     child: ElevatedButton(
                       onPressed: () {
+                        // Check if it's user's own property
+                        if (_isOwnProperty) {
+                          Models.showWarningSnackBar(context,
+                              'You cannot book your own property');
+                          return;
+                        }
+                        
                         if (_isUnavailable) {
                           Models.showWarningSnackBar(context,
                               'This property is not available.');
@@ -1125,7 +1162,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _isUnavailable
+                        backgroundColor: (_isUnavailable || _isOwnProperty)
                             ? Colors.grey
                             : AppConfig.primaryColor,
                         foregroundColor: Colors.white,
@@ -1135,11 +1172,13 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
                         ),
                       ),
                       child: Text(
-                        _isUnavailable 
-                          ? 'Not Available' 
-                          : (workingPropertyData['listingType'] ?? 'rent') == 'sale'
-                            ? 'Contact Owner'
-                            : 'Book Now',
+                        _isOwnProperty
+                          ? 'Your Property'
+                          : _isUnavailable 
+                            ? 'Not Available' 
+                            : (workingPropertyData['listingType'] ?? 'rent') == 'sale'
+                              ? 'Contact Owner'
+                              : 'Book Now',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -1634,7 +1673,7 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
 
   Future<void> _navigateToBooking() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user?.email == null) {
+    if (user == null || user.email == null) {
       Models.showWarningSnackBar(
           context, 'Please sign in to book this property');
       return;
@@ -1650,6 +1689,15 @@ class _TenantPropertyDetailState extends State<TenantPropertyDetail>
     if (widget.propertyData == null) {
       Models.showErrorSnackBar(
           context, 'Property information is incomplete');
+      return;
+    }
+
+    // Prevent users from booking their own properties
+    final ownerEmail = widget.propertyData!['ownerEmail']?.toString().toLowerCase().trim();
+    final userEmail = user.email!.toLowerCase().trim();
+    if (ownerEmail != null && ownerEmail == userEmail) {
+      Models.showWarningSnackBar(
+          context, 'You cannot book your own property');
       return;
     }
 

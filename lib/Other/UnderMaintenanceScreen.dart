@@ -234,7 +234,7 @@ class _UnderMaintenanceScreenState extends State<UnderMaintenanceScreen>
                           SizedBox(width: width * 0.03),
                           Flexible(
                             child: Text(
-                              'Need urgent help? Contact support',
+                              'Need urgent help? Contact support at ${AppConfig.supportEmail}',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: width * 0.037,
@@ -251,7 +251,7 @@ class _UnderMaintenanceScreenState extends State<UnderMaintenanceScreen>
 
                     // Footer
                     Text(
-                      'Thank you for your patience! 🙏',
+                      'Thank you for your patience!',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: width * 0.035,

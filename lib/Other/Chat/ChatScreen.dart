@@ -10,6 +10,7 @@ import 'package:housinghub/config/AppConfig.dart';
 import 'package:housinghub/Other/Chat/TypingIndicator.dart';
 import 'package:housinghub/Helper/ShimmerHelper.dart';
 import 'package:housinghub/Helper/Models.dart';
+import 'UserProfileDetailScreen.dart';
 
 class ChatScreen extends StatefulWidget {
   final String currentEmail;
@@ -237,8 +238,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
     } catch (e) {
       if (mounted) {
-        Models.showErrorSnackBar(
-            context, 'Failed to send attachment: $e');
+        Models.showErrorSnackBar(context, 'Failed to send attachment: $e');
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -631,135 +631,100 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final profilePicture = _profileLoaded ? _otherUserProfilePicture : '';
 
     return Expanded(
-      child: Row(
-        children: [
-          // Profile picture or avatar with online status indicator
-          Stack(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: profilePicture.isEmpty
-                      ? _getAvatarColor(widget.otherEmail)
-                      : null,
-                  image: profilePicture.isNotEmpty
-                      ? DecorationImage(
-                          image: NetworkImage(profilePicture),
-                          fit: BoxFit.cover,
+      child: GestureDetector(
+        onTap: () {
+          // Open profile detail screen
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => UserProfileDetailScreen(
+              email: widget.otherEmail,
+              currentEmail: widget.currentEmail,
+            ),
+          ));
+        },
+        child: Row(
+          children: [
+            // Profile picture or avatar with online status indicator
+            Stack(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: profilePicture.isEmpty
+                        ? _getAvatarColor(widget.otherEmail)
+                        : null,
+                    image: profilePicture.isNotEmpty
+                        ? DecorationImage(
+                            image: NetworkImage(profilePicture),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  child: profilePicture.isEmpty
+                      ? Center(
+                          child: Text(
+                            Api.getUserInitials(displayName, widget.otherEmail),
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600),
+                          ),
                         )
                       : null,
                 ),
-                child: profilePicture.isEmpty
-                    ? Center(
-                        child: Text(
-                          Api.getUserInitials(displayName, widget.otherEmail),
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600),
-                        ),
-                      )
-                    : null,
-              ),
-              // Online status indicator - green dot (smaller for app bar)
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: StreamBuilder<DocumentSnapshot>(
-                  stream: Api.getUserPresenceStream(widget.otherEmail),
-                  builder: (context, snapshot) {
-                    bool isOnline = false;
-                    if (snapshot.hasData && snapshot.data!.exists) {
-                      final data =
-                          snapshot.data!.data() as Map<String, dynamic>;
-                      isOnline = data['isOnline'] ?? false;
-                    }
+                // Online status indicator - green dot (smaller for app bar)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: StreamBuilder<DocumentSnapshot>(
+                    stream: Api.getUserPresenceStream(widget.otherEmail),
+                    builder: (context, snapshot) {
+                      bool isOnline = false;
+                      if (snapshot.hasData && snapshot.data!.exists) {
+                        final data =
+                            snapshot.data!.data() as Map<String, dynamic>;
+                        isOnline = data['isOnline'] ?? false;
+                      }
 
-                    return AnimatedOpacity(
-                      opacity: isOnline ? 1.0 : 0.0,
-                      duration: Duration(milliseconds: 300),
-                      child: Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 2,
+                      return AnimatedOpacity(
+                        opacity: isOnline ? 1.0 : 0.0,
+                        duration: Duration(milliseconds: 300),
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 2,
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  displayName,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black,
+                      );
+                    },
                   ),
                 ),
-                StreamBuilder<DocumentSnapshot>(
-                  stream: Api.getUserPresenceStream(widget.otherEmail),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData || !snapshot.data!.exists) {
-                      return Text(
-                        'Last seen: Unknown',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
-                      );
-                    }
-
-                    final data = snapshot.data!.data() as Map<String, dynamic>;
-                    final isOnline = data['isOnline'] ?? false;
-                    final lastSeen = data['lastSeen'] as Timestamp?;
-
-                    if (isOnline) {
-                      return Row(
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: Colors.green,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          SizedBox(width: 4),
-                          Text(
-                            'Online',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.green,
-                            ),
-                          ),
-                        ],
-                      );
-                    } else {
-                      // Check if user has been offline for more than 24 hours
-                      if (lastSeen != null) {
-                        return Text(
-                          Api.formatLastSeen(lastSeen),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        );
-                      } else {
+              ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    displayName,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
+                  ),
+                  StreamBuilder<DocumentSnapshot>(
+                    stream: Api.getUserPresenceStream(widget.otherEmail),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData || !snapshot.data!.exists) {
                         return Text(
                           'Last seen: Unknown',
                           style: TextStyle(
@@ -768,13 +733,60 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           ),
                         );
                       }
-                    }
-                  },
-                ),
-              ],
+
+                      final data =
+                          snapshot.data!.data() as Map<String, dynamic>;
+                      final isOnline = data['isOnline'] ?? false;
+                      final lastSeen = data['lastSeen'] as Timestamp?;
+
+                      if (isOnline) {
+                        return Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'Online',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.green,
+                              ),
+                            ),
+                          ],
+                        );
+                      } else {
+                        // Check if user has been offline for more than 24 hours
+                        if (lastSeen != null) {
+                          return Text(
+                            Api.formatLastSeen(lastSeen),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          );
+                        } else {
+                          return Text(
+                            'Last seen: Unknown',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

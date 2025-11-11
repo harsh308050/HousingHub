@@ -14,29 +14,23 @@ class _SplashscreenState extends State<Splashscreen> {
   @override
   void initState() {
     super.initState();
-    // We'll let the animations play, then check maintenance and authentication status after 3 seconds
     Future.delayed(Duration(seconds: 3), () {
       checkMaintenanceAndNavigate();
     });
   }
 
-  // Check maintenance status first, then authentication
   void checkMaintenanceAndNavigate() async {
     try {
-      // First, check if app is under maintenance
       bool isUnderMaintenance = await Api.isAppUnderMaintenance();
 
       if (isUnderMaintenance) {
-        // Navigate to maintenance screen
         Navigator.pushReplacementNamed(context, 'UnderMaintenanceScreen');
         return;
       }
 
-      // If not under maintenance, proceed with normal authentication check
       checkAuthAndNavigate();
     } catch (e) {
       print("Error checking maintenance status: $e");
-      // On error, proceed with normal flow
       checkAuthAndNavigate();
     }
   }

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:housinghub/Login/SplashScreen.dart';
+import 'package:housinghub/SplashScreen.dart';
 import 'package:housinghub/Login/LoginScreen.dart';
 import 'package:housinghub/Other/Owner/OwnerHomeScreen.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -26,7 +26,6 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Initialize API keys from Firestore
   await ApiKeys.initialize();
 
   runApp(MyApp());

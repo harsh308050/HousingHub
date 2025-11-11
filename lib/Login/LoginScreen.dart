@@ -14,6 +14,7 @@ import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:housinghub/config/ApiKeys.dart';
+import 'package:housinghub/Login/ForgotPasswordScreen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -38,6 +39,9 @@ class _LoginScreenState extends State<LoginScreen> {
   // Owner approval proof selection state
   File? _selectedOwnerProofFile;
   String _selectedOwnerProofType = 'Aadhaar';
+
+  // Password visibility state
+  bool _obscurePassword = true;
 
   // For searchable dropdowns
   TextEditingController _stateSearchController = TextEditingController();
@@ -238,13 +242,26 @@ class _LoginScreenState extends State<LoginScreen> {
       padding: const EdgeInsets.only(bottom: 16.0),
       child: TextFormField(
         controller: controller,
-        obscureText: isPassword,
+        obscureText: isPassword ? _obscurePassword : false,
         validator: validator ??
             (value) => value!.isEmpty ? 'This field is required' : null,
         keyboardType: keyboardType,
         decoration: InputDecoration(
           hintText: hintText,
           prefixIcon: Icon(icon, color: AppConfig.primaryColor),
+          suffixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(
+                    _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                    color: AppConfig.primaryColor,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                  },
+                )
+              : null,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide(color: Colors.grey[300]!),
@@ -602,10 +619,8 @@ class _LoginScreenState extends State<LoginScreen> {
         },
         onError: (e) {
           log("Login error: ${e.toString()}");
-          String errorMessage = e is Exception
-              ? e.toString().replaceAll('Exception: ', '')
-              : 'Error: ${e.toString()}';
-          Models.showErrorSnackBar(context, errorMessage);
+          Models.showErrorSnackBar(
+              context, "Recheck Your Credentials, Invalid Email or Password");
         },
       );
     }
@@ -1029,6 +1044,17 @@ class _LoginScreenState extends State<LoginScreen> {
         false; // Default to false if dialog is dismissed
   }
 
+  // Forgot Password functionality
+  void _handleForgotPassword() {
+    // Navigate to the dedicated Forgot Password screen
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ForgotPasswordScreen(),
+      ),
+    );
+  }
+
   // Method to handle successful login/authentication
   void _navigateToHomeScreen() {
     // Set user presence as online
@@ -1260,6 +1286,20 @@ class _LoginScreenState extends State<LoginScreen> {
           validator: (value) =>
               value!.isEmpty ? 'Please enter your password' : null,
         ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: _handleForgotPassword,
+            child: Text(
+              'Forgot Password?',
+              style: TextStyle(
+                color: AppConfig.primaryColor,
+                fontSize: width * 0.035,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
         SizedBox(height: height * 0.01),
         _buildPrimaryButton(
           text: 'Login',
@@ -1307,6 +1347,20 @@ class _LoginScreenState extends State<LoginScreen> {
           hintText: 'Password',
           icon: Icons.lock,
           isPassword: true,
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: _handleForgotPassword,
+            child: Text(
+              'Forgot Password?',
+              style: TextStyle(
+                color: AppConfig.primaryColor,
+                fontSize: width * 0.035,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ),
         SizedBox(height: height * 0.01),
         _buildPrimaryButton(

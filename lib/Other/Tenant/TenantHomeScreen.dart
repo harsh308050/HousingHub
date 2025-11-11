@@ -881,7 +881,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                               bottom: 0,
                               left: 0,
                               right: 0,
-                              height: height * 0.15,
+                              height: height * 0.2,
                               child: Container(
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.vertical(
@@ -892,7 +892,7 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                                     end: Alignment.bottomCenter,
                                     colors: [
                                       Colors.transparent,
-                                      Colors.black.withOpacity(0.7),
+                                      Colors.black.withOpacity(0.9),
                                     ],
                                   ),
                                 ),
@@ -1277,9 +1277,8 @@ class _TenantHomeTabState extends State<TenantHomeTab> {
                             final property = validProperties[index];
                             return Padding(
                               padding: EdgeInsets.only(
-                                right: index < validProperties.length - 1
-                                    ? 12
-                                    : 0,
+                                right:
+                                    index < validProperties.length - 1 ? 12 : 0,
                               ),
                               child: _buildPropertyCardFromProperty(
                                 property: property,

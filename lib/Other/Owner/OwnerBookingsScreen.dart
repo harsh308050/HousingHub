@@ -941,6 +941,13 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
       return;
     }
 
+    // Prevent users from messaging themselves
+    if (ownerEmail.toLowerCase().trim() == tenantEmail.toLowerCase().trim()) {
+      Models.showWarningSnackBar(
+          context, 'Cannot open chat with yourself');
+      return;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ChatScreen(
