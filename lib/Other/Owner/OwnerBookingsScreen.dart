@@ -669,25 +669,25 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
           ),
           label: _label('View Details'),
         );
-        Widget rejectBtn = ElevatedButton.icon(
+        Widget rejectBtn = ElevatedButton(
           onPressed: () => _rejectBooking(bookingData),
           style: solidRed,
-          icon: const Icon(Icons.close_rounded, color: Colors.white),
-          label: _label(
+          child: _label(
             'Reject',
           ),
         );
-        Widget approveBtn = ElevatedButton.icon(
+        Widget approveBtn = ElevatedButton(
           onPressed: () => _approveBooking(bookingData),
           style: solidGreen,
-          icon: const Icon(Icons.check_circle_outline, color: Colors.white),
-          label: _label('Approve'),
+          child: _label("Approve"),
+          // icon: const Icon(Icons.check_circle_outline, color: Colors.white),
+          // label: _label('Approve'),
         );
-        Widget markCompleteBtn = ElevatedButton.icon(
+        Widget markCompleteBtn = ElevatedButton(
           onPressed: () => _markCompleted(bookingData),
           style: solidPrimary,
-          icon: const Icon(Icons.task_alt, color: Colors.white),
-          label: _label('Mark Complete'),
+          // icon: const Icon(Icons.task_alt, color: Colors.white),
+          child: _label('Mark Complete'),
         );
         Widget contactBtn = OutlinedButton.icon(
           onPressed: () => _openChat(bookingData),
@@ -795,13 +795,15 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Approve Booking'),
+        title: const Text('Approve Booking',
+            style: TextStyle(color: AppConfig.primaryColor)),
         content: Text(
             'Approve booking request from ${bookingData['tenantData']['firstName']} ${bookingData['tenantData']['lastName']}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppConfig.primaryColor)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
@@ -943,8 +945,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
 
     // Prevent users from messaging themselves
     if (ownerEmail.toLowerCase().trim() == tenantEmail.toLowerCase().trim()) {
-      Models.showWarningSnackBar(
-          context, 'Cannot open chat with yourself');
+      Models.showWarningSnackBar(context, 'Cannot open chat with yourself');
       return;
     }
 

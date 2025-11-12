@@ -278,45 +278,136 @@ class _TenantHomeScreenState extends State<TenantHomeScreen>
   }
 
   Widget _buildBottomNavigationBar() {
-    return BottomNavigationBar(
-      currentIndex: _selectedIndex,
-      onTap: (index) {
-        setState(() {
-          _selectedIndex = index;
-        });
+    if (_currentUser?.email == null) {
+      // Fallback if no user is logged in
+      return BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        selectedItemColor: AppConfig.primaryColor,
+        unselectedItemColor: Colors.grey,
+        showUnselectedLabels: false,
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.search),
+            activeIcon: Icon(Icons.search),
+            label: 'Search',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bookmark_border),
+            activeIcon: Icon(Icons.bookmark),
+            label: 'Saved',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.chat_outlined),
+            activeIcon: Icon(Icons.chat),
+            label: 'Messages',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ],
+      );
+    }
+
+    return StreamBuilder<int>(
+      stream: Api.getUnreadMessageCountStream(_currentUser!.email!),
+      builder: (context, snapshot) {
+        final unreadCount = snapshot.data ?? 0;
+
+        return BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+          selectedItemColor: AppConfig.primaryColor,
+          unselectedItemColor: Colors.grey,
+          showUnselectedLabels: false,
+          type: BottomNavigationBarType.fixed,
+          items: [
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.search),
+              activeIcon: Icon(Icons.search),
+              label: 'Search',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.bookmark_border),
+              activeIcon: Icon(Icons.bookmark),
+              label: 'Saved',
+            ),
+            BottomNavigationBarItem(
+              icon: _buildMessageTabIcon(unreadCount, false),
+              activeIcon: _buildMessageTabIcon(unreadCount, true),
+              label: 'Messages',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              activeIcon: Icon(Icons.person),
+              label: 'Profile',
+            ),
+          ],
+        );
       },
-      selectedItemColor: AppConfig.primaryColor,
-      unselectedItemColor: Colors.grey,
-      showUnselectedLabels: false,
-      type: BottomNavigationBarType.fixed,
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home_outlined),
-          activeIcon: Icon(Icons.home),
-          label: 'Home',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.search),
-          activeIcon: Icon(Icons.search),
-          label: 'Search',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.bookmark_border),
-          activeIcon: Icon(Icons.bookmark),
-          label: 'Saved',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.chat_outlined),
-          activeIcon: Icon(Icons.chat),
-          label: 'Messages',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline),
-          activeIcon: Icon(Icons.person),
-          label: 'Profile',
-        ),
-      ],
     );
+  }
+
+  Widget _buildMessageTabIcon(int unreadCount, bool isActive) {
+    final icon = Icon(
+      isActive ? Icons.chat : Icons.chat_outlined,
+      color: isActive ? AppConfig.primaryColor : Colors.grey,
+    );
+
+    if (unreadCount > 0) {
+      return Stack(
+        children: [
+          icon,
+          Positioned(
+            right: 0,
+            top: 0,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 16,
+                minHeight: 16,
+              ),
+              child: Text(
+                unreadCount > 99 ? '99+' : unreadCount.toString(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return icon;
   }
 }
 

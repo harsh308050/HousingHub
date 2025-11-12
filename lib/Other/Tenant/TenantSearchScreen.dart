@@ -52,7 +52,8 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
     _maxPriceCtrl.text = '50000';
     _maxPriceLimit = 50000;
     _maxPriceCtrl.addListener(() {
-      final value = double.tryParse(_maxPriceCtrl.text.replaceAll(',', '')) ?? 0;
+      final value =
+          double.tryParse(_maxPriceCtrl.text.replaceAll(',', '')) ?? 0;
       setState(() {
         _maxPriceLimit = value;
       });
@@ -80,12 +81,14 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
         _all = list;
         // Update max price controller if current value is less than found max
         if (_maxPriceLimit < maxPrice && _maxPriceCtrl.text.isEmpty) {
-          _maxPriceCtrl.text = Models.formatIndianCurrency(maxPrice.toStringAsFixed(0));
+          _maxPriceCtrl.text =
+              Models.formatIndianCurrency(maxPrice.toStringAsFixed(0));
           _maxPriceLimit = maxPrice;
         }
       });
       if (list.isEmpty && mounted) {
-        Models.showInfoSnackBar(context, 'No properties found.');
+        print("No properties found.");
+        // Models.showInfoSnackBar(context, 'No properties found.');
       }
     } catch (e) {
       if (mounted) {
@@ -438,16 +441,19 @@ class _TenantSearchTabState extends State<TenantSearchTab> {
                     keyboardType: TextInputType.number,
                     onChanged: (value) {
                       // Remove any existing formatting and parse the number
-                      final cleanValue = value.replaceAll(RegExp(r'[^0-9]'), '');
+                      final cleanValue =
+                          value.replaceAll(RegExp(r'[^0-9]'), '');
                       if (cleanValue.isNotEmpty) {
                         final number = int.tryParse(cleanValue);
                         if (number != null) {
                           // Format the number and update the controller
-                          final formatted = Models.formatIndianCurrency(number.toString());
+                          final formatted =
+                              Models.formatIndianCurrency(number.toString());
                           if (formatted != value) {
                             _maxPriceCtrl.value = _maxPriceCtrl.value.copyWith(
                               text: formatted,
-                              selection: TextSelection.collapsed(offset: formatted.length),
+                              selection: TextSelection.collapsed(
+                                  offset: formatted.length),
                             );
                           }
                         }

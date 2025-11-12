@@ -90,41 +90,36 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 // Back button
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: AppConfig.primaryColor.withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    icon: const Icon(Icons.arrow_back,
+                        color: AppConfig.primaryColor),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ),
-
-                SizedBox(height: height * 0.08),
-
-                // Central decorative circle
+                SizedBox(height: height * 0.06),
                 Center(
                   child: Container(
                     width: width * 0.3,
                     height: width * 0.3,
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppConfig.primaryColor,
-                        width: 3,
-                      ),
                       boxShadow: [
                         BoxShadow(
-                          color: AppConfig.primaryColor.withOpacity(0.5),
+                          color: AppConfig.primaryColor.withOpacity(0.3),
                           blurRadius: 40,
                           spreadRadius: 5,
                         ),
                       ],
                     ),
+                    child: Image.asset(
+                      AppConfig.logoPath,
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
-
-                SizedBox(height: height * 0.06),
-
+                SizedBox(height: height * 0.03),
                 // Title
                 Center(
                   child: Text(
@@ -132,27 +127,27 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     style: TextStyle(
                       fontSize: width * 0.07,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: AppConfig.primaryColor,
                     ),
                   ),
                 ),
 
-                SizedBox(height: height * 0.02),
+                SizedBox(height: height * 0.01),
 
                 // Subtitle
                 Center(
                   child: Text(
-                    'Enter your email and we will send a 5-digit\nverification code instantly',
+                    'Enter your email and we will send a password reset link on that email.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: width * 0.038,
-                      color: Colors.white.withOpacity(0.7),
+                      color: Colors.black.withOpacity(0.7),
                       height: 1.5,
                     ),
                   ),
                 ),
 
-                SizedBox(height: height * 0.05),
+                SizedBox(height: height * 0.03),
 
                 // Form
                 Form(
@@ -162,10 +157,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     children: [
                       // Email address label
                       Text(
-                        'Email address*',
+                        'Email*',
                         style: TextStyle(
                           fontSize: width * 0.04,
-                          color: Colors.white,
+                          color: AppConfig.primaryColor.withOpacity(0.8),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -175,14 +170,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Colors.black),
                         decoration: InputDecoration(
                           hintText: 'example@gmail.com',
                           hintStyle: TextStyle(
-                            color: Colors.white.withOpacity(0.4),
+                            color: Colors.black.withOpacity(0.4),
                           ),
-                          filled: true,
-                          fillColor: Colors.white.withOpacity(0.1),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
@@ -190,7 +183,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide(
-                              color: Colors.white.withOpacity(0.2),
+                              color: Colors.black.withOpacity(0.2),
                               width: 1,
                             ),
                           ),
@@ -198,7 +191,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide(
                               color: AppConfig.primaryColor,
-                              width: 2,
+                              width: 1.5,
                             ),
                           ),
                           contentPadding: EdgeInsets.symmetric(
@@ -237,7 +230,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                   width: 24,
                                   height: 24,
                                   child: CircularProgressIndicator(
-                                    color: Colors.white,
+                                    color: AppConfig.primaryVariant,
                                     strokeWidth: 2,
                                   ),
                                 )
@@ -251,7 +244,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
-                                      'Send Code',
+                                      'Send Link',
                                       style: TextStyle(
                                         fontSize: width * 0.045,
                                         fontWeight: FontWeight.w600,
@@ -276,8 +269,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       Text(
                         'Already have an account? ',
                         style: TextStyle(
-                          fontSize: width * 0.038,
-                          color: Colors.white.withOpacity(0.7),
+                          fontSize: width * 0.04,
+                          color: Colors.black.withOpacity(0.7),
                         ),
                       ),
                       GestureDetector(
@@ -285,7 +278,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         child: Text(
                           'Sign In',
                           style: TextStyle(
-                            fontSize: width * 0.038,
+                            fontSize: width * 0.04,
                             color: AppConfig.primaryColor,
                             fontWeight: FontWeight.w600,
                           ),

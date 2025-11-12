@@ -1021,7 +1021,13 @@ class _LoginScreenState extends State<LoginScreen> {
           barrierDismissible: false,
           builder: (BuildContext context) {
             return AlertDialog(
-              title: Text('Email Not Verified'),
+              title: Text(
+                'Email Not Verified',
+                style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppConfig.primaryColor),
+              ),
               content: Text(
                   'Your email address has not been verified. Would you like to resend the verification email?'),
               actions: <Widget>[
@@ -1031,8 +1037,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     Navigator.of(context).pop(false);
                   },
                 ),
-                TextButton(
-                  child: Text('Resend'),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    backgroundColor: AppConfig.primaryColor,
+                  ),
+                  child: Text('Resend', style: TextStyle(color: Colors.white)),
                   onPressed: () {
                     Navigator.of(context).pop(true);
                   },

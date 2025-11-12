@@ -703,8 +703,6 @@ class _AddPropertyState extends State<AddProperty> {
     'AC': false,
     'Mess Facility': false,
     'House Keeping': false,
-    'Furnished': false,
-    'Unfurnished': false,
   };
 
   Widget _buildPropertyDetailsStep() {
@@ -896,6 +894,55 @@ class _AddPropertyState extends State<AddProperty> {
                   }
                   if (int.tryParse(value) == null) {
                     return 'Please enter a valid number';
+                  }
+                  return null;
+                },
+              ),
+              SizedBox(height: 24),
+
+              // Furnishing Status (for rent)
+              Text(
+                'Furnishing Status',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[800],
+                ),
+              ),
+              SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _selectedFurnishingStatus,
+                decoration: InputDecoration(
+                  hintText: 'Select furnishing status',
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AppConfig.primaryColor),
+                  ),
+                ),
+                items: _furnishingOptions.map((String option) {
+                  return DropdownMenuItem(
+                    value: option,
+                    child: Text(option),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _selectedFurnishingStatus = newValue;
+                  });
+                },
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please select furnishing status';
                   }
                   return null;
                 },
@@ -1242,14 +1289,7 @@ class _AddPropertyState extends State<AddProperty> {
             Wrap(
               spacing: 12,
               runSpacing: 12,
-              children: _amenities.entries.where((entry) {
-                // Filter out Furnished and Unfurnished for sale properties
-                if (_listingType == 'sale' && 
-                    (entry.key == 'Furnished' || entry.key == 'Unfurnished')) {
-                  return false;
-                }
-                return true;
-              }).map((entry) {
+              children: _amenities.entries.map((entry) {
                 return GestureDetector(
                   onTap: () {
                     setState(() {
@@ -1315,10 +1355,6 @@ class _AddPropertyState extends State<AddProperty> {
         return Icons.restaurant;
       case 'House Keeping':
         return Icons.cleaning_services;
-      case 'Furnished':
-        return Icons.chair;
-      case 'Unfurnished':
-        return Icons.other_houses_outlined;
       default:
         return Icons.check_circle;
     }
@@ -1562,20 +1598,69 @@ class _AddPropertyState extends State<AddProperty> {
 
   Future<void> _pickImage(ImageSource source) async {
     try {
-      // Optimize by specifying image quality
-      final XFile? pickedFile = await _picker.pickImage(
-        source: source,
-        imageQuality:
-            70, // Reduce image quality to make uploads faster and smaller
-      );
-      if (pickedFile != null) {
-        setState(() {
-          propertyImages.add(File(pickedFile.path));
-        });
-        print('Image added: ${pickedFile.path}');
+      if (source == ImageSource.gallery) {
+        // For gallery, allow multiple image selection
+        final List<XFile> pickedFiles = await _picker.pickMultiImage(
+          imageQuality:
+              70, // Reduce image quality to make uploads faster and smaller
+        );
+
+        if (pickedFiles.isNotEmpty) {
+          // Check if adding these images would exceed the limit of 5
+          int remainingSlots = 5 - propertyImages.length;
+
+          if (remainingSlots <= 0) {
+            Models.showWarningSnackBar(
+              context,
+              'Maximum 5 images allowed. Please remove some images first.',
+            );
+            return;
+          }
+
+          // Take only the number of images that fit within the limit
+          List<XFile> imagesToAdd = pickedFiles.take(remainingSlots).toList();
+
+          if (pickedFiles.length > remainingSlots) {
+            Models.showWarningSnackBar(
+              context,
+              'Only ${remainingSlots} image(s) added. Maximum limit is 5 images.',
+            );
+          }
+
+          setState(() {
+            for (var file in imagesToAdd) {
+              propertyImages.add(File(file.path));
+            }
+          });
+
+          print('${imagesToAdd.length} image(s) added');
+        }
+      } else {
+        // For camera, pick single image
+        if (propertyImages.length >= 5) {
+          Models.showWarningSnackBar(
+            context,
+            'Maximum 5 images allowed. Please remove some images first.',
+          );
+          return;
+        }
+
+        final XFile? pickedFile = await _picker.pickImage(
+          source: source,
+          imageQuality: 70,
+        );
+
+        if (pickedFile != null) {
+          setState(() {
+            propertyImages.add(File(pickedFile.path));
+          });
+          print('Image added: ${pickedFile.path}');
+        }
       }
     } catch (e) {
       print('Error picking image: $e');
+      Models.showErrorSnackBar(
+          context, 'Error selecting images: ${e.toString()}');
     }
   }
 
@@ -1612,30 +1697,60 @@ class _AddPropertyState extends State<AddProperty> {
   }
 
   void _showImagePickerOptions() {
+    final height = MediaQuery.of(context).size.height;
+    final width = MediaQuery.of(context).size.width;
     showModalBottomSheet(
       context: context,
       builder: (BuildContext context) {
-        return SafeArea(
-          child: Wrap(
-            children: <Widget>[
-              ListTile(
-                leading: Icon(Icons.photo_library),
-                title: Text('Choose from Gallery'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickImage(ImageSource.gallery);
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.camera_alt),
-                title: Text('Take a Photo'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickImage(ImageSource.camera);
-                },
-              ),
-            ],
-          ),
+        return ListView(
+          shrinkWrap: true,
+          padding: EdgeInsets.only(top: height * .03, bottom: height * .05),
+          children: [
+            Text(
+              'Pick Profile Picture',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: AppConfig.primaryColor,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600),
+            ),
+            SizedBox(
+              height: height * .02,
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                //gallery
+                ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        shadowColor: AppConfig.primaryColor,
+                        elevation: 1,
+                        backgroundColor: Colors.white,
+                        shape: const CircleBorder(),
+                        fixedSize: Size(width * .3, height * .15)),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _pickImage(ImageSource.gallery);
+                    },
+                    child: Image.asset(
+                      'assets/images/add_image.png',
+                    )),
+                //camera
+                ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        shadowColor: AppConfig.primaryColor,
+                        elevation: 1,
+                        backgroundColor: Colors.white,
+                        shape: const CircleBorder(),
+                        fixedSize: Size(width * .3, height * .15)),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _pickImage(ImageSource.camera);
+                    },
+                    child: Image.asset('assets/images/camera.png'))
+              ],
+            )
+          ],
         );
       },
     );
@@ -1713,6 +1828,7 @@ class _AddPropertyState extends State<AddProperty> {
                 ? int.parse(_securityDepositController.text)
                 : 0,
             'minimumBookingPeriod': _selectedMinimumBookingPeriod,
+            'furnishingStatus': _selectedFurnishingStatus,
           });
         } else {
           // Sale properties
@@ -1793,12 +1909,35 @@ class _AddPropertyState extends State<AddProperty> {
             SizedBox(height: 24),
 
             // Property Images Section
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Property Images',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                Text(
+                  '${propertyImages.length}/5',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: propertyImages.length >= 5
+                        ? Colors.red
+                        : AppConfig.primaryColor,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
             Text(
-              'Property Images',
+              'Select up to 5 images for your property',
               style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[800],
+                fontSize: 12,
+                color: Colors.grey[600],
               ),
             ),
             SizedBox(height: 16),
@@ -1808,34 +1947,47 @@ class _AddPropertyState extends State<AddProperty> {
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: [
+                  // Add Image Button
                   Container(
                     width: 120,
                     margin: EdgeInsets.only(right: 12),
                     decoration: BoxDecoration(
-                      color: Colors.grey[50],
+                      color: propertyImages.length >= 5
+                          ? Colors.grey[200]
+                          : Colors.grey[50],
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: Colors.grey[300]!,
+                        color: propertyImages.length >= 5
+                            ? Colors.grey[400]!
+                            : Colors.grey[300]!,
                         style: BorderStyle.solid,
                       ),
                     ),
                     child: InkWell(
-                      onTap: () {
-                        _showImagePickerOptions();
-                      },
+                      onTap: propertyImages.length >= 5
+                          ? null
+                          : () {
+                              _showImagePickerOptions();
+                            },
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
                             Icons.add_photo_alternate_outlined,
                             size: 32,
-                            color: Colors.grey[600],
+                            color: propertyImages.length >= 5
+                                ? Colors.grey[400]
+                                : Colors.grey[600],
                           ),
                           SizedBox(height: 8),
                           Text(
-                            'Add Image',
+                            propertyImages.length >= 5
+                                ? 'Limit Reached'
+                                : 'Add Images',
                             style: TextStyle(
-                              color: Colors.grey[600],
+                              color: propertyImages.length >= 5
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600],
                               fontSize: 12,
                             ),
                           ),
@@ -1954,7 +2106,7 @@ class _AddPropertyState extends State<AddProperty> {
                                 ),
                                 SizedBox(height: 8),
                                 Text(
-                                  'Video uploaded',
+                                  'Video Selected',
                                   style: TextStyle(
                                     color: Colors.grey[700],
                                     fontSize: 14,

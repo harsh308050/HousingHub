@@ -2100,14 +2100,19 @@ class Api {
       final propertyDoc = tenantDoc.collection('Properties').doc(propertyId);
 
       await _firestore.runTransaction((tx) async {
+        // IMPORTANT: All reads must come before all writes in a transaction
+        // Read property document first
         final propSnap = await tx.get(propertyDoc);
         if (!propSnap.exists) return; // nothing to do
 
+        // Read tenant metadata document
+        final metaSnap = await tx.get(tenantDoc);
+
+        // Now perform all writes after all reads are complete
         // Delete property doc
         tx.delete(propertyDoc);
 
         // Decrement counter if meta exists
-        final metaSnap = await tx.get(tenantDoc);
         if (metaSnap.exists) {
           final current =
               (metaSnap.data() as Map<String, dynamic>)['savedCount'] ?? 0;
@@ -2286,7 +2291,8 @@ class Api {
     String? attachmentUrl,
   }) async {
     // Prevent users from messaging themselves
-    if (senderEmail.toLowerCase().trim() == receiverEmail.toLowerCase().trim()) {
+    if (senderEmail.toLowerCase().trim() ==
+        receiverEmail.toLowerCase().trim()) {
       throw Exception('You cannot send messages to yourself');
     }
 
@@ -2402,6 +2408,31 @@ class Api {
         .collection('Messages')
         .where('participants', arrayContains: _normEmail(userEmail))
         .snapshots();
+  }
+
+  // Get stream of unread message count for a user
+  static Stream<int> getUnreadMessageCountStream(String userEmail) {
+    final normalizedEmail = _normEmail(userEmail);
+
+    return _firestore
+        .collection('Messages')
+        .where('participants', arrayContains: normalizedEmail)
+        .snapshots()
+        .map((snapshot) {
+      int totalUnread = 0;
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        if (data['unreadCounts'] is Map) {
+          final unreadCounts = data['unreadCounts'] as Map;
+          final count = unreadCounts[normalizedEmail] ?? 0;
+          totalUnread += count as int;
+        }
+      }
+      return totalUnread;
+    }).handleError((error) {
+      print('Error in unread message count stream: $error');
+      return 0;
+    });
   }
 
   // Upload any chat attachment to Cloudinary (auto resource type)

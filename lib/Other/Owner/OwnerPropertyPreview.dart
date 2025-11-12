@@ -347,7 +347,6 @@ class _OwnerPropertyPreviewState extends State<OwnerPropertyPreview>
                         } else {
                           _isVideoSelected = false;
                           _currentMediaIndex = index;
-                          // pause video if switching away
                           _videoController?.pause();
                         }
                       });
